@@ -106,7 +106,7 @@ impl Producer {
         let declarations = Declarations::parse(&raw, native, Some(&registry))?
             .ok_or("original producer requires executable bindings")?;
         let projects = input(&profile.projects)?;
-        let mut registered = methods(&json(&projects)?)?;
+        let mut registered = methods(&projects)?;
         let mut selected = BTreeMap::new();
         for name in profile.prerequisites.iter().chain(&profile.operations) {
             let mut rows = registered

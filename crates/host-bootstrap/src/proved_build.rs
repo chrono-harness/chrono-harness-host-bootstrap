@@ -347,7 +347,7 @@ fn run_attempt(
     let verus = profile::path(root, &config.verus_directory, b".chrono-harness/bin/")?;
     let executable = profile::path(root, &config.cargo_verus, b".chrono-harness/bin/")?;
     let projects = profile::read(root, &config.projects, b".chrono-harness/")?;
-    let mut methods = execution::methods(&chrono_harness::json(&projects)?)?;
+    let mut methods = execution::methods(&projects)?;
     let mut recovery = methods
         .remove(&config.recovery_operation)
         .ok_or("E_VERUS_BUILD: missing registered cache recovery")?;
