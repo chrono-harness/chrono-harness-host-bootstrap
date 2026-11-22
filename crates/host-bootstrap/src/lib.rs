@@ -11,6 +11,7 @@ pub mod original;
 pub mod owner;
 pub mod profile;
 pub mod proved_build;
+mod registered_methods;
 pub mod shared;
 pub mod source;
 pub mod verified_bindings;

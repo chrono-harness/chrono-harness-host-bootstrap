@@ -15,14 +15,16 @@ pub fn operation_argument<'a>(declared: &'a str, output: &'a str) -> (actual: &'
 }
 
 #[cfg(not(verus_keep_ghost))]
+pub use crate::registered_methods::Method;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) use crate::registered_methods::methods;
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment},
     verified_bindings as policy,
 };
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::{copy_hashed, file_identity};
-#[cfg(not(verus_keep_ghost))]
-pub use chrono_judge_registration::execution::{Method, methods};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]

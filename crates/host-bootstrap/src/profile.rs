@@ -1,4 +1,4 @@
-//! 当前宿主启动配置与构建操作的预检；只读取显式输入，不选择或启动进程。
+//! 当前宿主启动配置与构建操作的预检；读取显式输入，通过登记判官解析方法，尚未运行构建操作。
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
@@ -259,7 +259,7 @@ impl Loaded {
         let declarations = Declarations::parse(&bytes, native, Some(&registry))?
             .ok_or("native bootstrap requires tool bindings")?;
         let projects = read(root, &profile.projects, b".chrono-harness/")?;
-        let mut registered = methods(&json(&projects)?)?;
+        let mut registered = methods(&projects)?;
         let mut operations = BTreeMap::new();
         for (names, prerequisite) in [(&profile.prerequisites, true), (&profile.operations, false)]
         {
