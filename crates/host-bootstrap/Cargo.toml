@@ -1,0 +1,26 @@
+[package]
+name = "chrono-host-bootstrap"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-host-bootstrap"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-worktree = { git = "https://github.com/chrono-harness/chrono-harness-worktree.git", rev = "8d11cbf5385d838213911c4debbef4d336a0ca2c" }
+chrono-harness = { git = "https://github.com/chrono-harness/chrono-harness-runner.git", rev = "a1cff08f74d996d618372f20adc203d1b5904d50" }
+chrono-judge-registration = { git = "https://github.com/chrono-harness/chrono-harness-judge-registration.git", rev = "76530cce04ad04ebda2f71a16a8a51f930c2daa8" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+
+[profile.dev.package.sha2]
+opt-level = 3
