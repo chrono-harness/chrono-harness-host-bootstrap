@@ -36,4 +36,10 @@ proof_bindings=(--extern "chrono_identifiers=$scratch/libchrono_identifiers.rlib
 cargo metadata --locked --format-version 1 --manifest-path crates/host-bootstrap/Cargo.toml > "$scratch/packages.json"
 export CHRONO_VERUS_OWNER_PUBLICATION="$scratch/owner_publication.rs"
 jq -er '[.packages[] | select(.name == "chrono-worktree") | .manifest_path | sub("Cargo.toml$"; "src/verified_owner_publication.rs")] | select(length == 1) | "#[path = " + (first | @json) + "] pub mod owner_publication;"' "$scratch/packages.json" > "$CHRONO_VERUS_OWNER_PUBLICATION"
+cargo metadata --locked --format-version 1 --manifest-path crates/host-bootstrap/Cargo.toml > "$scratch/proof-packages.json"
+export CHRONO_TEST_PROOF_POLICY="$scratch/CHRONO_TEST_PROOF_POLICY.rs"
+jq -er '[.packages[] | select(.name == "chrono-harness") | .manifest_path | sub("Cargo.toml$"; "src/verified_verifier.rs")] | select(length == 1) | "#[path = " + (first | @json) + "] mod policy;"' "$scratch/proof-packages.json" > "$CHRONO_TEST_PROOF_POLICY"
+
 prove verify.bootstrap-bindings crates/host-bootstrap/src/verified_bindings.rs
+prove verify.bootstrap-bindings-tests crates/host-bootstrap-tests/tests/verified_bindings.rs
+prove verify.bootstrap-cargo-tests crates/host-bootstrap-tests/tests/verified_cargo.rs
