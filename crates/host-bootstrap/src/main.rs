@@ -151,6 +151,30 @@ fn execute() -> u8 {
 
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments.first().and_then(|arg| arg.to_str()) == Some("original-report-v1") {
+        use std::io::Write;
+        let read = || -> Result<(), String> {
+            if arguments.len() != 1 {
+                return Err("original-report-v1 reads its query from stdin".into());
+            }
+            let root = std::env::current_dir().map_err(|e| e.to_string())?;
+            let reply = chrono_host_bootstrap::report_query::read(
+                &root,
+                &std::env::vars_os().collect(),
+                std::io::stdin().lock(),
+            )?;
+            let mut out = std::io::stdout().lock();
+            serde_json::to_writer(&mut out, &reply).map_err(|e| e.to_string())?;
+            out.flush().map_err(|e| e.to_string())
+        };
+        return match read() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("E_BOOTSTRAP_ORIGINAL: {e}");
+                2.into()
+            }
+        };
+    }
     let (host, operation) = match arguments.as_slice() {
         [host, _, operation] if operation.to_str() == Some("produce") => (Some(host), "produce"),
         [host, _, operation, _] if matches!(operation.to_str(), Some("install" | "verify")) => {

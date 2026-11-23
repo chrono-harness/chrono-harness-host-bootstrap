@@ -11,3 +11,15 @@
 本仓发行在 Linux x86_64 和 macOS arm64 分别构建。安装或回退时从同一标签读取二进制和 SHA256SUMS，核对对应平台摘要。
 
 启用生命周期所有者升级或原构建复用的宿主需要在 PATH 中安装提供 `adopted-owner-v1` 的 chrono-worktree。工作树程序核对属于它的部署状态。bootstrap 对返回的暂存记录和本仓构建报告、当前选中的可执行文件再做比对。普通首次构建以及独立的 Cargo-Verus 编译沿用各自登记的工具。
+
+### 构建报告查询
+
+在宿主根目录运行 `chrono-host-bootstrap original-report-v1`。从 stdin 读一个 JSON 对象，成功时 stdout 输出 JSON 并退出 0，失败时 stderr 说明原因并退出 2。
+
+| operation | 输入 | 返回值 |
+| --- | --- | --- |
+| `checkout` | 宿主相对路径 `profile` | 当前 Git 源和平台、原报告的完整 UTF-8 文本，以及校验后的安装目标、安装摘要和输出流描述 |
+| `retained` | `profile`、`platform`、`source`、原文 `report`、保存输出流的绝对路径 `directory` | 用登记和两流原字节校验后的安装及流摘要。可传 `revision: {"commit":"…","tree":"…"}` 从固定 Git 树读取登记，该修订必须与报告的源一致 |
+| `streams` | 原文 `report` | 按操作顺序列出 stdout、stderr 的路径、长度和 SHA-256。此操作仅解码描述 |
+| `source` | 无 | 当前宿主的 commit、tree、dirty 和观察错误 |
+| `platform` | 无 | 运行平台的 system 和 machine |

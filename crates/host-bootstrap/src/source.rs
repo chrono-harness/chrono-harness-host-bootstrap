@@ -51,7 +51,11 @@ impl<'a> Committed<'a> {
         let mut command = bindings::command(
             self.root,
             &self.git,
-            &["--no-optional-locks", "--no-replace-objects"],
+            &[
+                "--no-optional-locks",
+                "--no-replace-objects",
+                "--literal-pathspecs",
+            ],
             self.environment,
         )?;
         command
