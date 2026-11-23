@@ -10,12 +10,6 @@ extern crate chrono_identifiers as identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
-// 复用生命周期所有者的权威类型和发布判断；不复制为宿主私有版本。
-#[cfg(not(verus_keep_ghost))]
-pub use chrono_worktree::verified_owner_publication as owner_publication;
-#[cfg(verus_keep_ghost)]
-include!(env!("CHRONO_VERUS_OWNER_PUBLICATION"));
-
 #[cfg(verus_keep_ghost)]
 #[path = "construction.rs"]
 pub mod construction;
@@ -49,18 +43,6 @@ pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
 {
     valid_sha256(expected) && identifiers::equal_bytes(actual, expected)
 }
-
-pub fn owner_publication_header(schema: &str, adoption: &str, completion: &str) -> (valid: bool)
-    ensures valid <==> (schema@ == "chrono-bootstrap-owner-publication/v1"@
-        && adoption@ == "not-claimed"@ && completion@ == "not-claimed"@),
-{
-    equal_text(schema, "chrono-bootstrap-owner-publication/v1") && equal_text(adoption, "not-claimed")
-        && equal_text(completion, "not-claimed")
-}
-
-pub fn owner_adoption_header(schema: &str) -> (valid: bool)
-    ensures valid <==> schema@ == "chrono-worktree-owner-adoption/v1"@,
-{ equal_text(schema, "chrono-worktree-owner-adoption/v1") }
 
 pub fn owner_stage_input(installed_empty: bool, declared: bool, selected: &str, expected: &str) -> (valid: bool)
     ensures valid <==> (installed_empty && declared && selected@ == expected@),

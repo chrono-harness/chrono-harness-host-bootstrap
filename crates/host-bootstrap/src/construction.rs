@@ -501,10 +501,7 @@ impl<'a> Construction<'a> {
     }
 
     /// 成功还须具备全部原操作、安装和 owner stage，调用方的 Ok 不能代替完成事实。
-    pub fn stage_owner(
-        &mut self,
-        previous: &policy::owner_publication::Binding,
-    ) -> Result<(), BuildFailure> {
+    pub fn stage_owner(&mut self, previous: &crate::owner::Binding) -> Result<(), BuildFailure> {
         let report_directory = self
             .directory
             .strip_prefix(self.root)
