@@ -222,25 +222,22 @@ pub fn upgrade(
         &profile.participation.program,
         b".chrono-harness/bin/",
     )?;
-    let current_path = profile::path(root, owner::CURRENT, b".chrono-harness/state/")?;
-    if current_path.exists() {
-        let current = json(&fs::read(&current_path).map_err(|error| error.to_string())?)?;
-        if current["schema"] == "chrono-worktree-owner-adoption/v1"
-            && current["source_commit"].as_str() == observed.commit.as_deref()
-            && current["installed"]
-                == serde_json::to_value(owner::file_binding(&selected)?)
-                    .map_err(|error| error.to_string())?
-        {
-            owner::qualified_publication(
-                root,
-                environment,
-                native,
-                &current,
-                &profile.participation.program,
-                &declaration.selected_original,
-            )?;
-            return Ok(());
-        }
+    if let Some(adoption) = owner::adopted_owner(
+        root,
+        environment,
+        &profile.participation.program,
+        true,
+        observed.commit.as_deref(),
+    )? {
+        owner::qualified_publication(
+            root,
+            environment,
+            native,
+            &adoption,
+            &profile.participation.program,
+            &declaration.selected_original,
+        )?;
+        return Ok(());
     }
     let original = profile.report_destination(root)?;
     if original.exists() {
@@ -277,10 +274,8 @@ pub fn upgrade(
         sha256(&bytes) == qualification.selected.sha256,
         bytes.len() as u64,
         qualification.selected.size,
-    ) || !crate::verified_bindings::owner_publication::binding_equal(
-        &owner::file_binding(&selected)?,
-        &qualification.selected,
-    ) {
+    ) || owner::file_binding(&selected)? != qualification.selected
+    {
         return Err("qualified selected owner changed before construction".into());
     }
     let parent = profile::path(
@@ -322,10 +317,8 @@ pub fn upgrade(
         write_attempt(publication.as_ref(), &carrier, &bytes)?;
         fs::set_permissions(&carrier, fs::Permissions::from_mode(0o755))
             .map_err(|error| error.to_string())?;
-        if !crate::verified_bindings::owner_publication::binding_equal(
-            &owner::file_binding(&selected)?,
-            &qualification.selected,
-        ) || file_identity(&carrier)?.0 != qualification.selected.sha256
+        if owner::file_binding(&selected)? != qualification.selected
+            || file_identity(&carrier)?.0 != qualification.selected.sha256
         {
             return Err("qualified selected owner changed before construction".into());
         }
@@ -415,11 +408,14 @@ pub fn upgrade(
             "deployment",
             publication.as_ref(),
         )?;
-        let adopted = json(&fs::read(current_path).map_err(|error| error.to_string())?)?;
-        if adopted["source_commit"].as_str() != observed.commit.as_deref()
-            || adopted["installed"]
-                != serde_json::to_value(owner::file_binding(&selected)?)
-                    .map_err(|error| error.to_string())?
+        if owner::adopted_owner(
+            root,
+            environment,
+            &profile.participation.program,
+            true,
+            observed.commit.as_deref(),
+        )?
+        .is_none()
         {
             return Err("owner deployment did not publish current adoption".into());
         }

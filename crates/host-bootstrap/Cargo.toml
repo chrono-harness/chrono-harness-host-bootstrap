@@ -16,7 +16,6 @@ bench = false
 
 [dependencies]
 vstd = "=0.0.0-2026-04-20-1748"
-chrono-worktree = { git = "https://github.com/chrono-harness/chrono-harness-worktree.git", rev = "8d11cbf5385d838213911c4debbef4d336a0ca2c" }
 chrono-harness = { git = "https://github.com/chrono-harness/chrono-harness-runner.git", rev = "a1cff08f74d996d618372f20adc203d1b5904d50" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
