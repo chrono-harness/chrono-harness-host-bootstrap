@@ -12,6 +12,8 @@ pub mod owner;
 pub mod profile;
 pub mod proved_build;
 mod registered_methods;
+#[cfg(not(verus_keep_ghost))]
+pub mod report_query;
 pub mod shared;
 pub mod source;
 pub mod verified_bindings;

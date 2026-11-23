@@ -25,3 +25,7 @@ path = "tests/bindings.rs"
 [[test]]
 name = "registered_methods"
 path = "tests/registered_methods.rs"
+
+[[test]]
+name = "report_query"
+path = "tests/report_query.rs"
