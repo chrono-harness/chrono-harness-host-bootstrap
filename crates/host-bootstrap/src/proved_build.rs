@@ -7,7 +7,7 @@ use crate::verified_cargo::{
 };
 use crate::{bindings::Environment, construction::BuildFailure, execution, profile};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::json;
 use std::{
     collections::BTreeMap,
     fs,
