@@ -1,8 +1,10 @@
 //! 在现有生命周期所有者的限时／限量内执行登记操作，保留并实时转交原字节。
 #[cfg(verus_keep_ghost)]
-use super::identifiers::equal_text;
+use super::artifact_identity::equal_text;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::{verified_identifiers::equal_text, verus};
+use crate::verified_bindings::artifact_identity::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 

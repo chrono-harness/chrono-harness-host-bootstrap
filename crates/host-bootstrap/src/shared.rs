@@ -432,7 +432,7 @@ impl Shared {
         binding: &str,
     ) -> Result<Validated, String> {
         let observed = source(root, environment)?;
-        if !chrono_harness::verified_identifiers::valid_digest_text(binding) {
+        if !crate::verified_bindings::valid_sha256(binding.as_bytes()) {
             return Err("missing or invalid startup producer binding".into());
         }
         let raw = profile::read(&self.transfer, "manifest.json", b"")?;

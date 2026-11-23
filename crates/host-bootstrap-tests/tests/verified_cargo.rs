@@ -4,7 +4,8 @@ mod cargo;
 use cargo::{Event, State};
 
 #[cfg(verus_keep_ghost)]
-extern crate chrono_identifiers as ids;
+#[path = "../../host-bootstrap/src/artifact_identity.rs"]
+mod artifact_identity;
 
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
@@ -65,7 +66,7 @@ fn compiler_library_paths_require_one_directory_and_one_fingerprint() {
     let output = matched.unwrap();
     let expected = [100u8, 47, 110, 45, 97, 46, 100];
     proof { assert(output.dependency@ =~= expected@); }
-    let correct = ids::equal_bytes(output.dependency.as_slice(), &expected);
+    let correct = artifact_identity::equal_bytes(output.dependency.as_slice(), &expected);
     expect(correct);
     expect(!cargo::compiler_library_paths(&[100u8], &[110u8], &files, true).is_some());
     expect(!cargo::compiler_library_paths(&[120u8], &[110u8], &files, false).is_some());

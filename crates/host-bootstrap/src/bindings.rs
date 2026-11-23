@@ -147,7 +147,7 @@ impl Declarations {
                 return Err(format!("rustup selected non-absolute {name} path"));
             }
             physical_file(&selected_path)?;
-            if !chrono_harness::verified_identifiers::equal_text(
+            if !crate::verified_bindings::artifact_identity::equal_text(
                 &file_identity(&selected_path)?.0,
                 &binding.sha256,
             ) {
