@@ -727,10 +727,10 @@ fn validate_prior(
         root.to_str().ok_or("non UTF-8 host root")?,
         proof.operation.pid,
         proof.operation.exit_code,
-    ) || !chrono_harness::verified_identifiers::equal_text(
+    ) || !crate::verified_bindings::artifact_identity::equal_text(
         &proof.operation.executable_sha256,
         &file_identity(executable)?.0,
-    ) || !chrono_harness::verified_identifiers::equal_text(
+    ) || !crate::verified_bindings::artifact_identity::equal_text(
         &proof.operation.operation,
         &config.operation,
     ) || proof.operation.reused_from.is_some()

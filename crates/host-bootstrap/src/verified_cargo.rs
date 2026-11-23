@@ -1,11 +1,11 @@
 //! 官方 Cargo-Verus 原输出的顺序合同；JSON 和文件观察由调用方传入。
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as identifiers;
 #[cfg(verus_keep_ghost)]
-extern crate chrono_identifiers as identifiers;
+use super::artifact_identity;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
-use identifiers::{equal_bytes, equal_text};
+use crate::verified_bindings::artifact_identity;
+use artifact_identity::{equal_bytes, equal_text};
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 use vstd::slice::{slice_subrange, slice_to_vec};
@@ -178,16 +178,16 @@ pub fn same_artifact(first: &Artifact, second: &Artifact) -> (same: bool)
 
 pub fn same_content(first: &Identity, second: &Identity) -> (same: bool)
     ensures same == (first.sha256@ == second.sha256@ && first.length == second.length
-        && first.length > 0 && identifiers::digest_format(vstd::utf8::encode_utf8(first.sha256@))),
+        && first.length > 0 && artifact_identity::digest_format(vstd::utf8::encode_utf8(first.sha256@))),
 {
     equal_text(first.sha256.as_str(), second.sha256.as_str()) && first.length == second.length
-        && first.length > 0 && identifiers::valid_digest(first.sha256.as_str().as_bytes())
+        && first.length > 0 && artifact_identity::valid_sha256(first.sha256.as_str().as_bytes())
 }
 
 pub open spec fn matching_identity(first: &Identity, second: &Identity) -> bool {
     first.path@ == second.path@ && first.sha256@ == second.sha256@ && first.length == second.length
         && first.path@.len() > 0 && first.length > 0
-        && identifiers::digest_format(vstd::utf8::encode_utf8(first.sha256@))
+        && artifact_identity::digest_format(vstd::utf8::encode_utf8(first.sha256@))
 }
 
 pub fn same_identity(first: &Identity, second: &Identity) -> (same: bool)
@@ -196,7 +196,7 @@ pub fn same_identity(first: &Identity, second: &Identity) -> (same: bool)
     equal_text(first.path.as_str(), second.path.as_str())
         && equal_text(first.sha256.as_str(), second.sha256.as_str()) && first.length == second.length
         && !first.path.as_str().is_empty() && first.length > 0
-        && identifiers::valid_digest(first.sha256.as_str().as_bytes())
+        && artifact_identity::valid_sha256(first.sha256.as_str().as_bytes())
 }
 
 pub open spec fn matching_identities(first: Seq<Identity>, second: Seq<Identity>) -> bool {

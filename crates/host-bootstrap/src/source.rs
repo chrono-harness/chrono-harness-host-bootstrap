@@ -101,7 +101,7 @@ impl<'a> Committed<'a> {
             || !matches!(fields[0], "100644" | "100755")
             || fields[1] != "blob"
             || name != declared
-            || !chrono_harness::verified_identifiers::valid_oid(fields[2].as_bytes())
+            || !crate::verified_bindings::artifact_identity::valid_oid(fields[2].as_bytes())
         {
             return Err(format!(
                 "immutable producer input is not a regular file: {declared}"

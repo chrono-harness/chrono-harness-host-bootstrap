@@ -8,12 +8,11 @@ cargo fmt --check --manifest-path crates/host-bootstrap/Cargo.toml
 cargo build --locked --manifest-path crates/host-bootstrap/Cargo.toml
 cargo fmt --check --manifest-path crates/host-bootstrap-tests/Cargo.toml
 cargo test --locked --manifest-path crates/host-bootstrap-tests/Cargo.toml
-proof_bindings=()
 prove() {
   local label=$1 root=$2
   local output="$scratch/$label.rlib"
   "${VERUS:-verus}" --crate-type=lib --no-cheating --no-external-by-default --num-threads 2 \
-    "${proof_bindings[@]}" --output-json --compile "--emit=link=$output,dep-info=$output.d" "$root" -o "$output" \
+    --output-json --compile "--emit=link=$output,dep-info=$output.d" "$root" -o "$output" \
     -Zchecksum-hash-algorithm=sha256 > "$scratch/proof.json" || { cat "$scratch/proof.json" >&2; return 1; }
   cat "$scratch/proof.json"
   jq -e '.verus.version == "0.2026.04.24.f8e1704" and
@@ -23,14 +22,6 @@ prove() {
     .errors == 0 and .verified > 0)' "$scratch/proof.json" >/dev/null
   test -s "$output" && test -s "$output.d"
 }
-
-# Resolve the exact source that Cargo fetched for the runtime dependency.
-identifiers_manifest=$(cargo metadata --locked --manifest-path crates/host-bootstrap/Cargo.toml --format-version 1 |
-  jq -er '[.packages[] | select(.name == "chrono-identifiers") | .manifest_path] | select(length == 1) | first')
-proof_bindings=(--crate-name chrono_identifiers --export "$scratch/chrono_identifiers.vir")
-prove libchrono_identifiers "$(dirname "$identifiers_manifest")/src/lib.rs"
-proof_bindings=(--extern "chrono_identifiers=$scratch/libchrono_identifiers.rlib"
-                --import "chrono_identifiers=$scratch/chrono_identifiers.vir")
 
 prove verify.bootstrap-bindings crates/host-bootstrap/src/verified_bindings.rs
 prove verify.bootstrap-bindings-tests crates/host-bootstrap-tests/tests/verified_bindings.rs

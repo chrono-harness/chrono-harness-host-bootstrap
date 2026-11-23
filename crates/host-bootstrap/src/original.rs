@@ -1,10 +1,12 @@
 //! 原始构建报告的候选校验器；只读取 producer 声明和原字节，不启动其工具或选择可写环境。
 #[cfg(verus_keep_ghost)]
-use super::{identifiers::equal_text, same_name_list, text_list_equal};
+use super::{artifact_identity::equal_text, same_name_list, text_list_equal};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::artifact_identity::equal_text;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_bindings::text_list_equal;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::{verified_identifiers::equal_text, verus};
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 

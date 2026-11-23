@@ -1,8 +1,8 @@
 //! owner 原始构建／发布资格的候选读取器；发布和租约仍由现有生命周期所有者执行。
 #[cfg(verus_keep_ghost)]
-use super::identifiers as stage_identifiers;
+use super::artifact_identity as stage_identifiers;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as stage_identifiers;
+use crate::verified_bindings::artifact_identity as stage_identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
@@ -481,7 +481,7 @@ pub fn stage_report(
         report_slot,
     )?;
     if let Some(expected) = expected_sha {
-        if !chrono_harness::verified_identifiers::equal_text(&sha256(&raw), expected) {
+        if !crate::verified_bindings::artifact_identity::equal_text(&sha256(&raw), expected) {
             return Err("owner stage original report differs".into());
         }
     }

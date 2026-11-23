@@ -4,11 +4,12 @@ use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[path = "artifact_identity.rs"]
+pub mod artifact_identity;
 #[cfg(verus_keep_ghost)]
-extern crate chrono_identifiers as identifiers;
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as identifiers;
-use identifiers::equal_text;
+pub use artifact_identity::hash_byte;
+pub use artifact_identity::valid_sha256;
+use artifact_identity::{equal_bytes, equal_text, valid_oid};
 
 #[cfg(verus_keep_ghost)]
 #[path = "construction.rs"]
@@ -41,7 +42,7 @@ pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
         && (forall|i: int| 0 <= i < expected@.len() ==> hash_byte(expected@[i]))
         && actual@ == expected@),
 {
-    valid_sha256(expected) && identifiers::equal_bytes(actual, expected)
+    valid_sha256(expected) && equal_bytes(actual, expected)
 }
 
 pub fn owner_stage_input(installed_empty: bool, declared: bool, selected: &str, expected: &str) -> (valid: bool)
@@ -81,8 +82,8 @@ pub fn startup_name(bytes: &[u8]) -> (valid: bool)
 }
 
 pub fn immutable_producer(commit: &[u8], tree: &[u8]) -> (valid: bool)
-    ensures valid <==> (identifiers::oid(commit@) && identifiers::oid(tree@)),
-{ identifiers::valid_oid(commit) && identifiers::valid_oid(tree) }
+    ensures valid <==> (artifact_identity::oid(commit@) && artifact_identity::oid(tree@)),
+{ valid_oid(commit) && valid_oid(tree) }
 
 pub fn original_header(schema: &str, passed: bool, config: &str, expected: &str,
     absolute_host: bool, imported: bool, errored: bool) -> (valid: bool)
@@ -574,30 +575,6 @@ pub fn declaration_source(
         DeclarationSource::Reject
     } else if direct { DeclarationSource::Direct }
     else { DeclarationSource::Unbound }
-}
-
-pub open spec fn hash_byte(b: u8) -> bool {
-    (48 <= b <= 57) || (97 <= b <= 102)
-}
-
-pub fn valid_sha256(bytes: &[u8]) -> (valid: bool)
-    ensures valid <==> (bytes@.len() == 64
-        && forall|i: int| 0 <= i < bytes@.len() ==> hash_byte(bytes@[i])),
-{
-    if bytes.len() != 64 { return false; }
-    let mut i = 0;
-    while i < bytes.len()
-        invariant
-            bytes.len() == 64,
-            0 <= i <= bytes.len(),
-            forall|j: int| 0 <= j < i ==> hash_byte(bytes@[j]),
-        decreases bytes.len() - i,
-    {
-        let b = bytes[i];
-        if !((48 <= b && b <= 57) || (97 <= b && b <= 102)) { return false; }
-        i += 1;
-    }
-    true
 }
 
 pub fn binding_valid(bytes: &[u8], registry: bool, has_path: bool) -> (valid: bool)
