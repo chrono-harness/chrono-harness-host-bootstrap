@@ -1,7 +1,11 @@
 #[cfg(verus_keep_ghost)]
 use super::policy::{lifecycle as stage_lifecycle, owner as stage_owner, profile as stage_profile};
 
-#[cfg(verus_keep_ghost)]
+use super::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::{
+    lifecycle as stage_lifecycle, owner as stage_owner, profile as stage_profile,
+};
 use vstd::prelude::*;
 
 verus! {
@@ -23,7 +27,7 @@ fn stage_recovery_requires_the_same_source_and_installed_bytes() {
     let stale = stage_lifecycle::qualified_copy_matches(false, true, 16, 16);
     let replaced = stage_lifecycle::qualified_copy_matches(true, false, 16, 16);
     let truncated = stage_lifecycle::qualified_copy_matches(true, true, 15, 16);
-    assert(exact && !other_slot && !other_digest && state && !config && !named);
-    assert(copied && !stale && !replaced && !truncated);
+    expect(exact && !other_slot && !other_digest && state && !config && !named);
+    expect(copied && !stale && !replaced && !truncated);
 }
 }

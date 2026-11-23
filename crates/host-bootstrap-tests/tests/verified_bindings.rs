@@ -1,21 +1,23 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::verified_bindings as policy;
 #[cfg(verus_keep_ghost)]
 #[path = "../../host-bootstrap/src/verified_bindings.rs"]
 mod policy;
 
 use policy::Executable;
 
-#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[path = "support/expect.rs"]
+mod expectation;
+use expectation::expect;
 
-#[cfg(verus_keep_ghost)]
 #[path = "proof_support/host-bootstrap/construction.rs"]
 mod construction_tests;
 
-#[cfg(verus_keep_ghost)]
 #[path = "proof_support/host-bootstrap/owner.rs"]
 mod stage_tests;
 
-#[cfg(verus_keep_ghost)]
 #[path = "proof_support/host-bootstrap/original.rs"]
 mod original_tests;
 
@@ -40,7 +42,7 @@ fn archive_reuse_requires_the_complete_declared_digest() {
     let partial = policy::archive_matches(&short, &zeros);
     let invalid_length = policy::archive_matches(&short, &short);
     let invalid_hex = policy::archive_matches(&upper, &upper);
-    assert(hit && !corrupt && !partial && !invalid_length && !invalid_hex);
+    expect(hit && !corrupt && !partial && !invalid_length && !invalid_hex);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -57,7 +59,7 @@ fn startup_names_modes_and_headers_use_exact_boundaries() {
     let unicode = policy::startup_name(&[195u8, 169]);
     let nul = policy::startup_name(&[0u8]);
     let newline = policy::startup_name(&[10u8]);
-    assert(schema && !changed && !empty && allowed && !slash && !unicode && !nul && !newline);
+    expect(schema && !changed && !empty && allowed && !slash && !unicode && !nul && !newline);
     let executable = policy::startup_mode(493);
     let lowest = policy::startup_mode(1);
     let highest = policy::startup_mode(511);
@@ -65,7 +67,7 @@ fn startup_names_modes_and_headers_use_exact_boundaries() {
     let zero = policy::startup_mode(0);
     let special = policy::startup_mode(512);
     let maximum = policy::startup_mode(4294967295u32);
-    assert(executable && lowest && highest && data_file && !zero && !special && !maximum);
+    expect(executable && lowest && highest && data_file && !zero && !special && !maximum);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -83,7 +85,7 @@ fn original_headers_require_success_identity_and_no_import_or_error() {
     let host = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", false, false, false);
     let imported = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, true, false);
     let error = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, false, true);
-    assert(good && !schema && !failed && !config && !host && !imported && !error);
+    expect(good && !schema && !failed && !config && !host && !imported && !error);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -118,8 +120,8 @@ fn original_operations_and_streams_compare_exact_fields_and_terminal_status() {
     let large = policy::stream_matches("hash", "hash", 18446744073709551615u64, 18446744073709551615u64);
     let digest = policy::stream_matches("different", "hash", 0, 0);
     let size = policy::stream_matches("hash", "hash", 1, 0);
-    assert(good && maximum && !tool && !argument && !missing && !cwd && !pid && !failed && !signal);
-    assert(stream && large && !digest && !size);
+    expect(good && maximum && !tool && !argument && !missing && !cwd && !pid && !failed && !signal);
+    expect(stream && large && !digest && !size);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -128,7 +130,7 @@ fn original_source_requires_both_exact_clean_observations_and_exposed_identity()
     let expected = source_observation("c", "t", false, None);
     let clean = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", false, None));
     let good = policy::original_source(&clean, &expected);
-    assert(good);
+    expect(good);
     let changed = policy::source_identity(source_observation("c", "t", false, None), source_observation("cc", "tt", false, None));
     proof {
         assert(changed.before.commit.unwrap()@.len() == 1);
@@ -136,25 +138,25 @@ fn original_source_requires_both_exact_clean_observations_and_exposed_identity()
         assert(!policy::source_observations_same(&changed.before, &changed.after));
     }
     let drift = policy::original_source(&changed, &expected);
-    assert(!drift);
+    expect(!drift);
     let dirty = policy::source_identity(source_observation("c", "t", true, None), source_observation("c", "t", true, None));
     let unclean = policy::original_source(&dirty, &expected);
-    assert(!unclean);
+    expect(!unclean);
     let error = source_observation("c", "t", false, Some("failed".to_string()));
     let failed = policy::original_source(&clean, &error);
-    assert(!failed);
+    expect(!failed);
     let mut forged = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", false, None));
     forged.after.dirty = Some(true);
     let bad_after = policy::original_source(&forged, &expected);
-    assert(!bad_after);
+    expect(!bad_after);
     forged.after.dirty = Some(false);
     forged.commit = None;
     let hidden = policy::original_source(&forged, &expected);
-    assert(!hidden);
+    expect(!hidden);
     let mut incomplete = source_observation("c", "t", false, None);
     incomplete.commit = None;
     let missing = policy::original_source(&clean, &incomplete);
-    assert(good && !drift && !unclean && !failed && !bad_after && !hidden && !missing);
+    expect(good && !drift && !unclean && !failed && !bad_after && !hidden && !missing);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -182,7 +184,7 @@ fn immutable_producer_requires_two_full_lowercase_git_identities() {
     let tree = policy::immutable_producer(&full, &long);
     let uppercase_commit = policy::immutable_producer(&upper, &full);
     let uppercase_tree = policy::immutable_producer(&full, &upper);
-    assert(good && sha256_identity && !zero_identity && !commit && !tree && !uppercase_commit && !uppercase_tree);
+    expect(good && sha256_identity && !zero_identity && !commit && !tree && !uppercase_commit && !uppercase_tree);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -224,12 +226,12 @@ fn construction_success_requires_the_complete_ordered_execution_installation_and
     let no_selection = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, false, false, false);
     let no_stage = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, true, true, false);
     let extra_stage = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, true, false, true);
-    assert(complete && stage && !unordered && !failed && !no_code && !no_install && !no_selection && !no_stage && !extra_stage);
+    expect(complete && stage && !unordered && !failed && !no_code && !no_install && !no_selection && !no_stage && !extra_stage);
     let passed = policy::construction_status(false, true);
     let interrupted = policy::construction_status(false, false);
     let errored = policy::construction_status(true, true);
     let missing_failed = policy::construction_status(true, false);
-    assert(passed is Passed && interrupted is Failed && errored is Failed && missing_failed is Failed);
+    expect(matches!(passed, policy::BuildStatus::Passed) && matches!(interrupted, policy::BuildStatus::Failed) && matches!(errored, policy::BuildStatus::Failed) && matches!(missing_failed, policy::BuildStatus::Failed));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -275,8 +277,8 @@ fn profile_sequences_keep_empty_subsets_but_reject_empty_or_duplicate_operation_
     let selected_subset = policy::names_subset(&selected, &names);
     let missing_subset = policy::names_subset(&missing, &names);
     let no_available = policy::names_subset(&selected, &empty);
-    assert(empty_names && valid && !repeated && !blank_name);
-    assert(empty_subset && selected_subset && !missing_subset && !no_available);
+    expect(empty_names && valid && !repeated && !blank_name);
+    expect(empty_subset && selected_subset && !missing_subset && !no_available);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -304,9 +306,9 @@ fn profile_modes_require_registry_bound_current_schema_and_one_owner_phase() {
     let compiler = policy::needs_configured_tool(false, "rustc");
     let custom = policy::needs_configured_tool(false, "custom");
     let prerequisite = policy::needs_configured_tool(true, "cargo");
-    assert(ordinary && upgrade && stage && !unknown && !unbound && !conflict && !no_upgrade);
-    assert(main && !relative_git && !other && !zero && one && !two);
-    assert(!cargo && !compiler && custom && prerequisite);
+    expect(ordinary && upgrade && stage && !unknown && !unbound && !conflict && !no_upgrade);
+    expect(main && !relative_git && !other && !zero && one && !two);
+    expect(!cargo && !compiler && custom && prerequisite);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -315,7 +317,7 @@ fn bootstrap_keeps_local_owners_and_uses_coordinator_only_to_seed_linked_hosts()
     let installed_main = policy::bootstrap_uses_local_owner(true, true);
     let initial_linked = policy::bootstrap_uses_local_owner(false, false);
     let installed_linked = policy::bootstrap_uses_local_owner(false, true);
-    assert(initial_main && installed_main && !initial_linked && installed_linked);
+    expect(initial_main && installed_main && !initial_linked && installed_linked);
 }
 
 fn source_observation(commit: &str, tree: &str, dirty: bool, error: Option<String>) -> (out: policy::SourceObservation)
@@ -339,9 +341,9 @@ fn source_identity_only_exposes_commit_and_tree_for_unchanged_clean_observations
     let status = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", true, None));
     let failed_before = policy::source_identity(source_observation("c", "t", true, Some("failed".to_string())), source_observation("cc", "tt", false, None));
     let failed_after = policy::source_identity(source_observation("c", "t", false, None), source_observation("cc", "tt", true, Some("failed".to_string())));
-    assert(clean.state is Clean && clean.commit is Some && clean.tree is Some);
-    assert(clean.commit.unwrap()@ == "c"@ && clean.tree.unwrap()@ == "t"@);
-    assert(dirty.state is Dirty && dirty.commit is None && dirty.tree is None);
+    expect(matches!(clean.state, policy::SourceState::Clean) && clean.commit.is_some() && clean.tree.is_some());
+    expect(policy::artifact_identity::equal_text(clean.commit.unwrap().as_str(), "c") && policy::artifact_identity::equal_text(clean.tree.unwrap().as_str(), "t"));
+    expect(matches!(dirty.state, policy::SourceState::Dirty) && dirty.commit.is_none() && dirty.tree.is_none());
     proof {
         assert(commit.before.commit.unwrap()@.len() == 1);
         assert(commit.after.commit.unwrap()@.len() == 2);
@@ -350,12 +352,12 @@ fn source_identity_only_exposes_commit_and_tree_for_unchanged_clean_observations
         assert(tree.after.tree.unwrap()@.len() == 2);
         assert(!policy::source_observations_same(&tree.before, &tree.after));
     }
-    assert(commit.state is Changed && commit.commit is None && commit.tree is None);
-    assert(tree.state is Changed && tree.commit is None && tree.tree is None);
-    assert(status.state is Changed && status.commit is None && status.tree is None);
-    assert(failed_before.state is Unavailable && failed_before.commit is None && failed_before.tree is None);
-    assert(failed_after.state is Unavailable && failed_after.commit is None && failed_after.tree is None);
-    assert(failed_before.before.error is Some && failed_after.after.error is Some);
+    expect(matches!(commit.state, policy::SourceState::Changed) && commit.commit.is_none() && commit.tree.is_none());
+    expect(matches!(tree.state, policy::SourceState::Changed) && tree.commit.is_none() && tree.tree.is_none());
+    expect(matches!(status.state, policy::SourceState::Changed) && status.commit.is_none() && status.tree.is_none());
+    expect(matches!(failed_before.state, policy::SourceState::Unavailable) && failed_before.commit.is_none() && failed_before.tree.is_none());
+    expect(matches!(failed_after.state, policy::SourceState::Unavailable) && failed_after.commit.is_none() && failed_after.tree.is_none());
+    expect(failed_before.before.error.is_some() && failed_after.after.error.is_some());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -371,11 +373,11 @@ fn exit_status_keeps_original_codes_and_only_negates_positive_signals() {
     let maximum_code = policy::process_exit(Some(2147483647i32), None);
     let maximum_signal = policy::process_exit(None, Some(2147483647i32));
     let minimum_signal = policy::process_exit(None, Some(-2147483648i32));
-    assert(success == Some(0i32) && failure == Some(17i32) && precedence == Some(17i32));
-    assert(signal == Some(-9i32) && missing is None);
-    assert(zero_signal is None && negative_signal is None && minimum_signal is None);
-    assert(minimum_code == Some(-2147483648i32) && maximum_code == Some(2147483647i32));
-    assert(maximum_signal == Some(-2147483647i32));
+    expect(matches!(success, Some(0i32)) && matches!(failure, Some(17i32)) && matches!(precedence, Some(17i32)));
+    expect(matches!(signal, Some(-9i32)) && missing.is_none());
+    expect(zero_signal.is_none() && negative_signal.is_none() && minimum_signal.is_none());
+    expect(minimum_code.is_some() && minimum_code.unwrap() == i32::MIN && matches!(maximum_code, Some(2147483647i32)));
+    expect(matches!(maximum_signal, Some(-2147483647i32)));
 }
 
 fn executable(path: &str, hash: &str, version: &str) -> (out: Executable)
@@ -396,8 +398,8 @@ fn environment_names_reject_only_the_reserved_prefix_equals_and_nul() {
     let value_empty = policy::environment_value(&empty);
     let value_lines = policy::environment_value(&[10u8, 13, 61]);
     let value_nul = policy::environment_value(&[10u8, 0]);
-    assert(normal && !missing && !equals && !nul && !reserved && shorter);
-    assert(value_empty && value_lines && !value_nul);
+    expect(normal && !missing && !equals && !nul && !reserved && shorter);
+    expect(value_empty && value_lines && !value_nul);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -431,7 +433,7 @@ fn host_paths_require_the_declared_prefix_and_exact_normal_components() {
     let trailing = policy::host_path(&trailing_bytes, &prefix);
     let nul = policy::host_path(&nul_bytes, &prefix);
     let wrong_prefix = policy::host_path(&[98u8, 47, 97], &prefix);
-    assert(good && hidden && !repeated && !current && !parent && !trailing && !nul && !wrong_prefix);
+    expect(good && hidden && !repeated && !current && !parent && !trailing && !nul && !wrong_prefix);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -451,8 +453,8 @@ fn host_paths_compare_full_components_and_host_variables_are_exact() {
     let cargo = policy::host_variable("CARGO_HOME");
     let temp = policy::host_variable("TMPDIR");
     let rustup = policy::host_variable("RUSTUP_HOME");
-    assert(separate && neighbor && !same && !child && !parent);
-    assert(home && cargo && temp && !rustup);
+    expect(separate && neighbor && !same && !child && !parent);
+    expect(home && cargo && temp && !rustup);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -461,8 +463,8 @@ fn toolchain_probes_choose_only_the_required_repairs() {
     let ordinary_format = policy::probe_action(false, false);
     let ready_cargo = policy::probe_action(true, true);
     let ready_format = policy::probe_action(true, false);
-    assert(ordinary_cargo is InstallMinimal && ordinary_format is AddFormat);
-    assert(ready_cargo is Ready && ready_format is Ready);
+    expect(matches!(ordinary_cargo, policy::ProbeAction::InstallMinimal) && matches!(ordinary_format, policy::ProbeAction::AddFormat));
+    expect(matches!(ready_cargo, policy::ProbeAction::Ready) && matches!(ready_format, policy::ProbeAction::Ready));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -480,7 +482,7 @@ fn native_binding_requires_both_fields_and_an_explicit_platform() {
     let absent = policy::platform_matches(None, &native);
     let wrong_system = policy::platform_matches(Some(&system), &native);
     let wrong_machine = policy::platform_matches(Some(&machine), &native);
-    assert(exact && !absent && !wrong_system && !wrong_machine);
+    expect(exact && !absent && !wrong_system && !wrong_machine);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -495,7 +497,7 @@ fn registry_identity_binds_schema_and_toolchain_independently() {
     let exact = policy::registry_matches("chrono-bootstrap-toolchains/v1", "1.95.0", "1.95.0");
     let schema = policy::registry_matches("chrono-bootstrap-toolchains/v2", "1.95.0", "1.95.0");
     let version = policy::registry_matches("chrono-bootstrap-toolchains/v1", "1.95.0x", "1.95.0");
-    assert(exact && !schema && !version);
+    expect(exact && !schema && !version);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -511,7 +513,7 @@ fn version_prefix_requires_a_delimiter_and_only_cargo_allows_an_exact_version() 
     let without_delimiter = policy::version_matches(&glued, &prefix, true);
     let wrong_prefix = policy::version_matches(&wrong, &prefix, true);
     let short = policy::version_matches(&prefix, &spaced, true);
-    assert(cargo && !rustc && with_suffix && !without_delimiter && !wrong_prefix && !short);
+    expect(cargo && !rustc && with_suffix && !without_delimiter && !wrong_prefix && !short);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -520,8 +522,8 @@ fn registry_rejects_direct_or_native_overrides_even_when_bindings_are_optional()
     let direct = policy::declaration_source(true, true, false, false, true);
     let native = policy::declaration_source(true, false, true, false, true);
     let both = policy::declaration_source(true, true, true, true, true);
-    assert(normal is Registry);
-    assert(direct is Reject && native is Reject && both is Reject);
+    expect(matches!(normal, policy::DeclarationSource::Registry));
+    expect(matches!(direct, policy::DeclarationSource::Reject) && matches!(native, policy::DeclarationSource::Reject) && matches!(both, policy::DeclarationSource::Reject));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -532,9 +534,9 @@ fn required_direct_bindings_need_a_matching_platform_and_declaration() {
     let missing_platform = policy::declaration_source(false, true, false, true, true);
     let optional = policy::declaration_source(false, true, false, false, false);
     let unbound = policy::declaration_source(false, false, false, false, false);
-    assert(accepted is Direct && optional is Direct);
-    assert(wrong is Reject && missing is Reject && missing_platform is Reject);
-    assert(unbound is Unbound);
+    expect(matches!(accepted, policy::DeclarationSource::Direct) && matches!(optional, policy::DeclarationSource::Direct));
+    expect(matches!(wrong, policy::DeclarationSource::Reject) && matches!(missing, policy::DeclarationSource::Reject) && matches!(missing_platform, policy::DeclarationSource::Reject));
+    expect(matches!(unbound, policy::DeclarationSource::Unbound));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -554,7 +556,7 @@ fn relocation_keeps_digest_and_version_and_only_ignores_the_old_path() {
     let version = executable("new", "hash", "other");
     let wrong_hash = policy::selected_matches(&hash, &expected, true);
     let wrong_version = policy::selected_matches(&version, &expected, true);
-    assert(accepted && !exact && !wrong_hash && !wrong_version);
+    expect(accepted && !exact && !wrong_hash && !wrong_version);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -569,9 +571,9 @@ fn only_the_repeated_relocatable_declared_path_is_retired() {
     let missing = policy::configured_action(None, Some("old"), true, false);
     let registry = policy::configured_action(None, None, true, true);
     let configured_registry = policy::configured_action(Some("current"), None, true, true);
-    assert(retired is Retired);
-    assert(exact is Observe && current is Observe && configured_registry is Observe);
-    assert(missing is Missing && registry is NotDeclared);
+    expect(matches!(retired, policy::ConfiguredAction::Retired));
+    expect(matches!(exact, policy::ConfiguredAction::Observe) && matches!(current, policy::ConfiguredAction::Observe) && matches!(configured_registry, policy::ConfiguredAction::Observe));
+    expect(matches!(missing, policy::ConfiguredAction::Missing) && matches!(registry, policy::ConfiguredAction::NotDeclared));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -587,7 +589,7 @@ fn inherited_compiler_and_both_wrapper_slots_are_independent_constraints() {
     let wrong = policy::compiler_selection("selected", Some("other"), None, None);
     let wrapper = policy::compiler_selection("selected", None, Some("other"), None);
     let workspace = policy::compiler_selection("selected", None, None, Some("other"));
-    assert(absent && empty && exact && !wrong && !wrapper && !workspace);
+    expect(absent && empty && exact && !wrong && !wrapper && !workspace);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -620,12 +622,12 @@ fn sha256_allows_zero_but_requires_exact_lowercase_hex_length() {
     let missing = policy::binding_valid(&zeros, false, false);
     let registry = policy::binding_valid(&zeros, true, false);
     let invalid_registry = policy::binding_valid(&upper, true, true);
-    assert(accepted);
-    assert(!short_hash);
-    assert(!long_hash);
-    assert(!upper_hash);
-    assert(!nul_hash);
-    assert(direct && !missing && registry && !invalid_registry);
+    expect(accepted);
+    expect(!short_hash);
+    expect(!long_hash);
+    expect(!upper_hash);
+    expect(!nul_hash);
+    expect(direct && !missing && registry && !invalid_registry);
 }
 
 }

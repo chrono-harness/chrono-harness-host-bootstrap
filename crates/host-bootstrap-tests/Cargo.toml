@@ -29,3 +29,14 @@ path = "tests/registered_methods.rs"
 [[test]]
 name = "report_query"
 path = "tests/report_query.rs"
+
+[dev-dependencies]
+vstd = "=0.0.0-2026-04-20-1748"
+
+[[test]]
+name = "verified_bindings"
+path = "tests/verified_bindings.rs"
+
+[[test]]
+name = "verified_cargo"
+path = "tests/verified_cargo.rs"

@@ -1,3 +1,7 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::{verified_bindings::artifact_identity, verified_cargo as cargo};
+#[cfg(verus_keep_ghost)]
 #[path = "../../host-bootstrap/src/verified_cargo.rs"]
 mod cargo;
 
@@ -7,17 +11,13 @@ use cargo::{Event, State};
 #[path = "../../host-bootstrap/src/artifact_identity.rs"]
 mod artifact_identity;
 
-#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
-#[cfg(verus_keep_ghost)]
-use vstd::vpanic as panic;
+#[path = "support/expect.rs"]
+mod expectation;
+use expectation::expect;
 
 verus! {
-
-fn expect(value: bool)
-    requires value,
-{ if !value { panic!(); } }
 
 proof fn library_literal_bytes()
     ensures vstd::utf8::encode_utf8("d/libn-a.rlib"@) == seq![100u8,47,108,105,98,110,45,97,46,114,108,105,98],

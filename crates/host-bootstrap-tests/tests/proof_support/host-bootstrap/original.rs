@@ -1,7 +1,9 @@
 #[cfg(verus_keep_ghost)]
 use super::policy::execution::operation_argument;
 
-#[cfg(verus_keep_ghost)]
+use super::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::execution::operation_argument;
 use vstd::prelude::*;
 
 verus! {
@@ -15,7 +17,7 @@ fn only_the_declared_argument_uses_the_current_attempt_output() {
         reveal_strlit("verus-download.headers");
         assert("{operation-output}"@.len() != "verus-download.headers"@.len());
     }
-    assert(bound@ == output@);
-    assert(literal@ == "verus-download.headers"@);
+    expect(super::policy::artifact_identity::equal_text(bound, output));
+    expect(super::policy::artifact_identity::equal_text(literal, "verus-download.headers"));
 }
 }
