@@ -123,18 +123,19 @@ fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
 }
 
 fn records(raw: &[u8], contract: &OutputContract) -> Result<Vec<Record>, String> {
-    let rows: Vec<Value> = serde_json::Deserializer::from_slice(raw)
-        .into_iter::<Value>()
+    let rows: Vec<&serde_json::value::RawValue> = serde_json::Deserializer::from_slice(raw)
+        .into_iter()
         .collect::<Result<_, _>>()
-        .map_err(|e| e.to_string())?;
-    let accepted = compiler::proof_rows(contract, &rows)?;
+        .map_err(|e| format!("E_VERUS_BUILD: complete Cargo stdout rejected: {e}"))?;
+    let texts: Vec<_> = rows.iter().map(|row| row.get()).collect();
+    let accepted = compiler::proof_rows(contract, &texts)?;
     rows.into_iter()
         .zip(accepted)
         .map(|(row, result)| match result {
             Some(valid) => Ok(Record::Proof(valid)),
-            None => serde_json::from_value::<Cargo>(row)
+            None => serde_json::from_str::<Cargo>(row.get())
                 .map(Record::Cargo)
-                .map_err(|e| e.to_string()),
+                .map_err(|e| format!("E_VERUS_BUILD: complete Cargo stdout rejected: {e}")),
         })
         .collect()
 }

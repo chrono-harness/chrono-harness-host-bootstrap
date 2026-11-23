@@ -49,7 +49,7 @@ pub struct OutputContract {
     pub commit: String,
 }
 
-pub fn proof_rows(contract: &OutputContract, rows: &[Value]) -> Result<Vec<Option<bool>>, String> {
+pub fn proof_rows(contract: &OutputContract, rows: &[&str]) -> Result<Vec<Option<bool>>, String> {
     let result: Vec<Option<bool>> =
         compiler(json!({"operation":"proof-rows","contract":contract,"rows":rows}))?;
     if result.len() != rows.len() {
