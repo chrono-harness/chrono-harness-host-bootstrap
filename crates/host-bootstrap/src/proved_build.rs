@@ -1,4 +1,7 @@
 //! 正式构建消费官方 Cargo-Verus 的原输出、编译器 checksum 和原库字节。
+use crate::verified_cargo::{
+    self as cargo, Artifact, BuildTargets, Cargo, Identity, Record, Recovery, TargetIdentity,
+};
 use crate::{bindings::Environment, construction::BuildFailure, execution, profile};
 use chrono_harness::{file_identity, retained_artifacts::retention, verified_verifier as verifier};
 use serde::{Deserialize, Serialize};
@@ -10,7 +13,6 @@ use std::{
 };
 use verifier::{
     OutputContract,
-    cargo::{self, Artifact, BuildTargets, Cargo, Identity, Record, Recovery, TargetIdentity},
     sources::{self, SourceBinding},
 };
 
@@ -121,9 +123,23 @@ fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
     Ok(())
 }
 
-fn records(raw: &[u8]) -> Result<Vec<Record>, String> {
+fn records(raw: &[u8], contract: &OutputContract) -> Result<Vec<Record>, String> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Original {
+        Proof(verifier::CompilerReport),
+        Cargo(Cargo),
+    }
     serde_json::Deserializer::from_slice(raw)
-        .into_iter::<Record>()
+        .into_iter::<Original>()
+        .map(|row| {
+            row.map(|row| match row {
+                Original::Proof(report) => {
+                    Record::Proof(verifier::accepts_report(&report, contract))
+                }
+                Original::Cargo(message) => Record::Cargo(message),
+            })
+        })
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("E_VERUS_BUILD: complete Cargo stdout rejected: {e}"))
 }
@@ -495,8 +511,8 @@ fn run_attempt(
             .ok_or("non UTF-8 binary")?
             .into(),
     };
-    let decoded = records(&output)?;
-    if !cargo::complete_records(&decoded, &targets, &config.output_contract) {
+    let decoded = records(&output, &config.output_contract)?;
+    if !cargo::complete_records(&decoded, &targets) {
         return Err("E_VERUS_BUILD: missing or invalid complete original build result".into());
     }
     let mut library = None;
@@ -723,8 +739,8 @@ fn validate_prior(
     }
     stream_matches(root, &proof.operation.stdout, proof.stdout.as_bytes())?;
     stream_matches(root, &proof.operation.stderr, &proof.stderr)?;
-    let decoded = records(proof.stdout.as_bytes())?;
-    if !cargo::complete_records(&decoded, targets, &config.output_contract) {
+    let decoded = records(proof.stdout.as_bytes(), &config.output_contract)?;
+    if !cargo::complete_records(&decoded, targets) {
         return Err("E_VERUS_BUILD: retained proof has no complete original result".into());
     }
     for record in &decoded {
