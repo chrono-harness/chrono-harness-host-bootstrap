@@ -1,4 +1,6 @@
 //! 本宿主共享启动产物；安装前校验全部原件，SDK 和工具不从产物中执行。
+use crate::codec::decode;
+use crate::files::{resolve_program, sha256};
 use crate::{
     bindings::{self, Environment, NativePlatform},
     construction::{BuildFailure, Report},
@@ -8,7 +10,6 @@ use crate::{
     source::{self, SourceObservation},
     verified_bindings::{self as policy, Executable},
 };
-use chrono_harness::{decode, resolve_program, sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{

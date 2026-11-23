@@ -23,6 +23,10 @@ pub fn operation_record_matches(tool: &str, expected_tool: &str,
 }
 
 #[cfg(not(verus_keep_ghost))]
+use crate::codec::json;
+#[cfg(not(verus_keep_ghost))]
+use crate::files::sha256;
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, NativePlatform},
     construction::Report,
@@ -31,8 +35,6 @@ use crate::{
     source::SourceObservation,
     verified_bindings::{self as policy, BuildStatus, Executable},
 };
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{json, sha256};
 #[cfg(not(verus_keep_ghost))]
 use serde_json::json;
 #[cfg(not(verus_keep_ghost))]
@@ -49,7 +51,7 @@ pub fn validate_fixed_execution(
     native: &NativePlatform,
     raw: &[u8],
 ) -> Result<Report, String> {
-    let report: Report = chrono_harness::decode(raw)?;
+    let report: Report = crate::codec::decode(raw)?;
     if Path::new(&report.host_root) != root {
         return Err("fixed original producer belongs to another host".into());
     }

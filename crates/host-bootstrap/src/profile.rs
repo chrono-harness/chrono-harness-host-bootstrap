@@ -1,6 +1,6 @@
 //! 当前宿主启动配置与构建操作的预检；读取显式输入，通过登记判官解析方法，尚未运行构建操作。
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -13,6 +13,8 @@ pub fn ordinary_state_input(named_owner: bool, state_input: bool) -> (required: 
 }
 
 #[cfg(not(verus_keep_ghost))]
+use crate::files::sha256;
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, Environment, NativePlatform},
     environment::Prepared,
@@ -20,7 +22,7 @@ use crate::{
     verified_bindings as policy,
 };
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::{json, no_symlink_parents, sha256};
+use crate::{codec::json, retention};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -102,7 +104,7 @@ pub fn path(root: &Path, declared: &str, prefix: &[u8]) -> Result<PathBuf, Strin
     if !policy::host_path(declared.as_bytes(), prefix) {
         return Err(format!("invalid bootstrap path: {declared}"));
     }
-    no_symlink_parents(root, declared)
+    crate::files::checked_path(root, declared)
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -117,15 +119,14 @@ pub(crate) fn read_original(
     prefix: &[u8],
     report_slot: Option<&str>,
 ) -> Result<Vec<u8>, String> {
-    use chrono_harness::retained_artifacts::retention;
-    let _original =
-        if ordinary_state_input(report_slot.is_some(), prefix == b".chrono-harness/state/") {
-            retention::read_guard(root, declared)?
-        } else if let Some(slot) = report_slot {
-            retention::consumer_read_guard(root, declared, &retention::current_report_role(slot))?
-        } else {
-            None
-        };
+    let needs_guard =
+        ordinary_state_input(report_slot.is_some(), prefix == b".chrono-harness/state/")
+            || report_slot.is_some();
+    let scope = needs_guard.then(|| retention::scope(root)).transpose()?;
+    let _original = scope
+        .as_ref()
+        .map(|scope| scope.read(declared, report_slot))
+        .transpose()?;
     let file = path(root, declared, prefix)?;
     if !file.is_file() {
         return Err(format!("bootstrap input is not a regular file: {declared}"));

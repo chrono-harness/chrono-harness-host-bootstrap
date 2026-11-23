@@ -108,14 +108,11 @@ pub fn read(root: &Path, environment: &Environment, input: impl Read) -> Result<
                 return Err("original stream directory must be absolute".into());
             }
             let report = producer.validate(report.as_bytes(), &source, &|path| {
-                fs::read(chrono_harness::no_symlink_parents(&directory, path)?)
-                    .map_err(|e| e.to_string())
+                fs::read(crate::files::checked_path(&directory, path)?).map_err(|e| e.to_string())
             })?;
             Ok(summary(&producer, &report))
         }
-        Query::Streams { report } => {
-            Ok(json!(streams(&chrono_harness::decode(report.as_bytes())?)))
-        }
+        Query::Streams { report } => Ok(json!(streams(&crate::codec::decode(report.as_bytes())?))),
         Query::Source {} => Ok(json!(source::observe(root, environment))),
         Query::Platform {} => Ok(json!(native_platform()?)),
     }

@@ -23,3 +23,5 @@
 | `streams` | 原文 `report` | 按操作顺序列出 stdout、stderr 的路径、长度和 SHA-256。此操作仅解码描述 |
 | `source` | 无 | 当前宿主的 commit、tree、dirty 和观察错误 |
 | `platform` | 无 | 运行平台的 system 和 machine |
+
+bootstrap 独立构建。两个 Cargo 项目从本仓和 crates.io 解析源码。运行宿主构建时，PATH 中的 `chrono-harness` 负责准入编译器输出、检查保留的进程证据和管理登记产物。原生子进程继承真实的 Unix 文件描述符。即使 bootstrap 提前退出，仍在工作的子进程继续持有相关租约。配置了 `.chrono-harness/logging.json` 的宿主通过已安装的 `chrono-diagnostics cli-events-v1` 写入滚动日志。

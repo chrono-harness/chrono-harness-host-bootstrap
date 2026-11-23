@@ -17,6 +17,8 @@ pub fn operation_argument<'a>(declared: &'a str, output: &'a str) -> (actual: &'
 }
 
 #[cfg(not(verus_keep_ghost))]
+use crate::files::{copy_hashed, file_identity};
+#[cfg(not(verus_keep_ghost))]
 pub(crate) use crate::registered_methods::methods;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::registered_methods::{Method, read_methods};
@@ -25,8 +27,6 @@ use crate::{
     bindings::{self, Environment},
     verified_bindings as policy,
 };
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{copy_hashed, file_identity};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -128,7 +128,7 @@ pub(crate) fn operation_argv(
 ) -> Result<Vec<String>, String> {
     let output = stdout.with_extension("output");
     let relative = output.to_str().ok_or("non UTF-8 bootstrap output path")?;
-    chrono_harness::relative_path(relative)?;
+    crate::files::relative_path(relative)?;
     let mut argv = vec![executable];
     argv.extend(
         method
