@@ -17,4 +17,4 @@ pub mod report_query;
 pub mod shared;
 pub mod source;
 pub mod verified_bindings;
-mod verified_cargo;
+pub mod verified_cargo;
