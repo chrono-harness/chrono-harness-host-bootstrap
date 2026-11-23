@@ -4,7 +4,7 @@ use super::artifact_identity as stage_identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_bindings::artifact_identity as stage_identifiers;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -17,6 +17,8 @@ pub fn stage_reuse_matches(path: &str, digest: &str, adopted_path: &str, adopted
 }
 
 #[cfg(not(verus_keep_ghost))]
+use crate::files::{file_identity, sha256};
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Environment, NativePlatform},
     construction::Report,
@@ -24,7 +26,7 @@ use crate::{
     source, verified_bindings as policy,
 };
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::{decode, file_identity, retained_artifacts::retention, sha256};
+use crate::{codec::decode, retention};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -329,7 +331,7 @@ pub(crate) fn adopted_owner(
         .get(OsStr::new("PATH"))
         .map(|value| value.to_str().ok_or("non UTF-8 PATH"))
         .transpose()?;
-    let program = chrono_harness::resolve_program(root, "chrono-worktree", path)?;
+    let program = crate::files::resolve_program(root, "chrono-worktree", path)?;
     let mut args = vec![
         "adopted-owner-v1",
         root.to_str().ok_or("non UTF-8 host root")?,
@@ -360,12 +362,12 @@ pub struct QualifiedStage {
 
 #[cfg(not(verus_keep_ghost))]
 pub fn file_binding(path: &Path) -> Result<Binding, String> {
-    let identity = chrono_harness::ownership::identity(path)?;
+    let identity = crate::files::identity(path)?;
     let before = fs::metadata(path).map_err(|error| error.to_string())?;
     let (digest, size) = file_identity(path)?;
     let after = fs::metadata(path).map_err(|error| error.to_string())?;
     let stamp = |metadata: &fs::Metadata| (metadata.len(), metadata.mtime(), metadata.mtime_nsec());
-    if identity != chrono_harness::ownership::identity(path)?
+    if identity != crate::files::identity(path)?
         || stamp(&before) != stamp(&after)
         || size != after.len()
     {
@@ -384,7 +386,7 @@ pub fn require_capabilities(root: &Path, environment: &Environment) -> Result<()
         .get(OsStr::new("CHRONO_WORKTREE_BOOTSTRAP"))
         .map(|value| Path::new(value))
         != Some(root)
-        || !chrono_harness::process_fds::inherited_available()?
+        || !crate::descriptors::available()?
     {
         return Err(
             "owner operation requires original ownership descriptors and host binding".into(),
@@ -415,12 +417,12 @@ pub fn stage(
     let before = file_binding(&source)?;
     let parent = profile::path(root, STAGES.trim_end_matches('/'), b".chrono-harness/bin/")?;
     fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
-    let directory = retention::unique_path(&parent, "stage-", "")?;
-    let publication = retention::create_adopted(
+    let scope = retention::scope(root)?;
+    let (directory, publication) = scope.create(
         root,
+        &parent,
+        "stage-",
         "bootstrap-owner-stage",
-        &directory,
-        true,
         serde_json::json!({"stage":"construction","publication":"not-established"}),
     )?;
     let relative = directory
@@ -429,15 +431,17 @@ pub fn stage(
         .to_str()
         .ok_or("non UTF-8 owner stage")?;
     if publication.is_some() {
-        let inventory =
-            retention::Inventory::adopted(root)?.ok_or("owner stage policy disappeared")?;
-        inventory.retain_diagnostic_path(relative)?;
+        scope.diagnostic(relative)?;
         // The live construction report owns this stage before any writer can
         // release it. Current/adopted report references later own its lifetime.
-        inventory.dependencies_paths(report_directory, &[relative.into()])?;
+        scope.dependencies(report_directory, &[relative.into()])?;
     }
     let target = directory.join("chrono-worktree");
-    retention::copy_adopted(publication.as_ref(), &source, &target)?;
+    if let Some(publication) = &publication {
+        publication.copy_file(&source, &target)?;
+    } else {
+        fs::copy(&source, &target).map_err(|e| e.to_string())?;
+    }
     fs::set_permissions(&target, fs::Permissions::from_mode(0o755))
         .map_err(|error| error.to_string())?;
     let staged = file_binding(&target)?;

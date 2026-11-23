@@ -1,19 +1,18 @@
 //! 正式构建消费官方 Cargo-Verus 的原输出、编译器 checksum 和原库字节。
+use crate::compiler::{self, OutputContract};
+use crate::files::file_identity;
+use crate::retention;
 use crate::verified_cargo::{
     self as cargo, Artifact, BuildTargets, Cargo, Identity, Record, Recovery, TargetIdentity,
 };
 use crate::{bindings::Environment, construction::BuildFailure, execution, profile};
-use chrono_harness::{file_identity, retained_artifacts::retention, verified_verifier as verifier};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-};
-use verifier::{
-    OutputContract,
-    sources::{self, SourceBinding},
 };
 
 #[derive(Deserialize, Serialize)]
@@ -124,24 +123,20 @@ fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
 }
 
 fn records(raw: &[u8], contract: &OutputContract) -> Result<Vec<Record>, String> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Original {
-        Proof(verifier::CompilerReport),
-        Cargo(Cargo),
-    }
-    serde_json::Deserializer::from_slice(raw)
-        .into_iter::<Original>()
-        .map(|row| {
-            row.map(|row| match row {
-                Original::Proof(report) => {
-                    Record::Proof(verifier::accepts_report(&report, contract))
-                }
-                Original::Cargo(message) => Record::Cargo(message),
-            })
+    let rows: Vec<Value> = serde_json::Deserializer::from_slice(raw)
+        .into_iter::<Value>()
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    let accepted = compiler::proof_rows(contract, &rows)?;
+    rows.into_iter()
+        .zip(accepted)
+        .map(|(row, result)| match result {
+            Some(valid) => Ok(Record::Proof(valid)),
+            None => serde_json::from_value::<Cargo>(row)
+                .map(Record::Cargo)
+                .map_err(|e| e.to_string()),
         })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("E_VERUS_BUILD: complete Cargo stdout rejected: {e}"))
+        .collect()
 }
 
 fn selected(artifact: &Artifact, manifest: &Path, source: &Path, name: &str, kind: &str) -> bool {
@@ -190,8 +185,7 @@ fn bind_dependency(
 ) -> Result<Vec<u8>, String> {
     let raw = bounded(dependency)?;
     let stem = dependency.with_extension("");
-    let encoded = sources::encode_path(stem.as_os_str().as_encoded_bytes());
-    let paths = sources::compiler_dependency_paths(&raw, &encoded)
+    let paths = compiler::compiler::<Option<Vec<Vec<u8>>>>(json!({"operation":"dependency-paths","dependency":raw,"stem":stem.as_os_str().as_encoded_bytes()}))?
         .ok_or("E_VERUS_BUILD: compiler dependency header rejected")?;
     let mut bindings = Vec::new();
     let mut seen = vec![false; required.len()];
@@ -211,11 +205,9 @@ fn bind_dependency(
                 seen[index] = true;
             }
         }
-        bindings.push(SourceBinding {
-            path,
-            sha256: observed.sha256.into_bytes(),
-            length: observed.length,
-        });
+        bindings.push(
+            json!({"path":path,"sha256":observed.sha256.into_bytes(),"length":observed.length}),
+        );
     }
     let mut targets = vec![dependency.as_os_str().as_encoded_bytes().to_vec()];
     targets.extend(
@@ -223,7 +215,11 @@ fn bind_dependency(
             .iter()
             .map(|p| p.as_os_str().as_encoded_bytes().to_vec()),
     );
-    if !cargo::all_present(&seen) || !sources::matches_cargo_dependency(&raw, &targets, &bindings) {
+    if !cargo::all_present(&seen)
+        || !compiler::compiler::<bool>(
+            json!({"operation":"dependency-matches","dependency":raw,"targets":targets,"sources":bindings}),
+        )?
+    {
         return Err("E_VERUS_BUILD: compiler source or binary checksums differ".into());
     }
     Ok(raw)
@@ -231,7 +227,7 @@ fn bind_dependency(
 
 fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Result<(), String> {
     if !cargo::content_matches(
-        &chrono_harness::sha256(bytes),
+        &crate::files::sha256(bytes),
         bytes.len() as u64,
         &stream.sha256,
         stream.size,
@@ -298,17 +294,11 @@ fn build_attempt(
                 "status":if result.is_ok() {"recovered"} else {"failed"},
                 "retention":"release after diagnosis/acceptance; rebuildable originals reclaimed within seven days after consumers end"});
             let declaration = if let Some(publication) =
-                retention::begin_adopted(root, "check-original", &directory, outcome.clone())?
+                retention::enroll(root, "check-original", &directory, outcome.clone())?
             {
                 let original = publication.protect_consumer(&consumer)?;
-                let declaration = retention::Consumer {
-                    schema: "chrono-retention-consumer/v1".into(),
-                    consumer: consumer.clone(),
-                    purpose:
-                        "registered build caller diagnosis and acceptance; release when consumed"
-                            .into(),
-                    originals: vec![original],
-                };
+                let declaration = serde_json::json!({"schema":"chrono-retention-consumer/v1","consumer":consumer,
+                    "purpose":"registered build caller diagnosis and acceptance; release when consumed","originals":[original]});
                 publication.complete(outcome)?;
                 Some(declaration)
             } else {
@@ -349,7 +339,7 @@ fn run_attempt(
 ) -> Result<(), BuildFailure> {
     let raw = profile::read(root, declaration, b".chrono-harness/ci/")?;
     let config: Config =
-        serde_json::from_value(chrono_harness::json(&raw)?).map_err(|e| e.to_string())?;
+        serde_json::from_value(crate::codec::json(&raw)?).map_err(|e| e.to_string())?;
     if !cargo::registered_sources(
         &config.schema,
         &config.library.source,
@@ -357,7 +347,9 @@ fn run_attempt(
     ) {
         return Err("E_VERUS_BUILD: invalid build registration".into());
     }
-    verifier::validate_contract(&Some(config.output_contract.clone()))?;
+    compiler::compiler::<()>(
+        json!({"operation":"validate-contract","contract":config.output_contract}),
+    )?;
     let manifest = profile::path(root, &config.manifest, b"")?;
     let target = profile::path(root, &config.target, b"")?;
     let verus = profile::path(root, &config.verus_directory, b".chrono-harness/bin/")?;
@@ -451,8 +443,8 @@ fn run_attempt(
             file_identity(source)?,
         );
     }
-    let key = chrono_harness::wire::digest(&(
-        chrono_harness::sha256(&raw),
+    let key = crate::codec::digest(&(
+        crate::files::sha256(&raw),
         &tools,
         &inputs,
         &method.argv,
@@ -587,7 +579,7 @@ fn run_attempt(
                                 .get(std::ffi::OsStr::new("PATH"))
                                 .and_then(|s| s.to_str());
                             let cargo =
-                                chrono_harness::resolve_program(root, &recovery.tool, search)?;
+                                crate::files::resolve_program(root, &recovery.tool, search)?;
                             let recovered = execution::run_operation(
                                 root,
                                 &directory,

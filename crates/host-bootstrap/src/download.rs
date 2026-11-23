@@ -1,10 +1,10 @@
 //! 固定归档的本地复用；摘要来自现役声明，网络与进程仍用已有工具。
+use crate::files::file_identity;
 use crate::{
     bindings::{self, Environment},
     construction::BuildFailure,
     profile, verified_bindings as policy,
 };
-use chrono_harness::file_identity;
 use serde::Serialize;
 use std::{fs, io, os::unix::process::ExitStatusExt, path::Path};
 

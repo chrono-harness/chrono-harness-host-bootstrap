@@ -1,6 +1,6 @@
 //! 本宿主的 bootstrap 编排；原所有者继续负责租约、部署、报告保留和清理。
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -14,6 +14,8 @@ pub fn qualified_copy_matches(original_digest: bool, executable_digest: bool, le
 }
 
 #[cfg(not(verus_keep_ghost))]
+use crate::files::{file_identity, sha256};
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment, NativePlatform},
     construction::BuildFailure,
@@ -22,10 +24,9 @@ use crate::{
     source,
 };
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::{
-    ProcessResult, decode, file_identity, json,
-    retained_artifacts::retention::{self, Consumer, Inventory, Publication},
-    sha256,
+use crate::{
+    codec::{ProcessResult, decode, json},
+    retention::{self, Publication},
 };
 #[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
@@ -64,8 +65,7 @@ fn retained_process(value: &Value) -> Result<ProcessResult, String> {
     ) {
         return Err("unsupported lifecycle process encoding".into());
     }
-    serde_json::from_value(chrono_harness::full::expand_process(value)?)
-        .map_err(|error| error.to_string())
+    crate::codec::expanded_process(value)
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -161,9 +161,7 @@ pub fn run_owner(
         &serde_json::to_vec(declaration).map_err(|error| error.to_string())?,
     )?;
     if let Some(publication) = publication {
-        let consumer: Consumer =
-            decode(&serde_json::to_vec(declaration).map_err(|error| error.to_string())?)?;
-        publication.accept_consumer(&consumer)?;
+        publication.accept_consumer(declaration)?;
     }
     if let Some(value) = report.get("managed_process") {
         let process = retained_process(value)?;
@@ -284,12 +282,12 @@ pub fn upgrade(
         b".chrono-harness/state/",
     )?;
     fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
-    let directory = retention::unique_path(&parent, "attempt-", "")?;
-    let publication = retention::create_adopted(
+    let scope = retention::scope(root)?;
+    let (directory, publication) = scope.create(
         root,
+        &parent,
+        "attempt-",
         "check-original",
-        &directory,
-        true,
         serde_json::json!({"status":"started","completion":"not-established"}),
     )?;
     let relative = directory
@@ -298,9 +296,7 @@ pub fn upgrade(
         .to_str()
         .ok_or("non UTF-8 owner attempt")?;
     if publication.is_some() {
-        Inventory::adopted(root)?
-            .ok_or("owner attempt retention policy disappeared")?
-            .retain_diagnostic_path(relative)?;
+        scope.diagnostic(relative)?;
     }
     let outcome = (|| -> Result<(), BuildFailure> {
         write_attempt(
@@ -428,9 +424,7 @@ pub fn upgrade(
             "exit_code":outcome.as_ref().err().and_then(|error| error.exit_code),
         }));
         let diagnostic = if outcome.is_err() || completion.is_err() {
-            Inventory::adopted(root)?
-                .ok_or("owner attempt retention policy disappeared")?
-                .retain_diagnostic_path(relative)
+            scope.diagnostic(relative)
         } else {
             Ok(())
         };

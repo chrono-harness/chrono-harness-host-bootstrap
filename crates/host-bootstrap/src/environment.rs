@@ -1,10 +1,11 @@
 //! 显式环境选择与 Rustup 调用；不修改进程全局环境或全局默认工具链。
+use crate::codec::json;
+use crate::files::resolve_program;
 use crate::profile::path as host_path;
 use crate::{
     bindings::{self, Declarations, Environment, NativePlatform, Tools},
     verified_bindings::{self as policy, Executable},
 };
-use chrono_harness::{json, resolve_program};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,

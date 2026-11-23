@@ -1,6 +1,6 @@
 //! 源码构建报告的实际生产者；所有者保护、升级和共享交接由外层现役入口编排。
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
+use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -13,6 +13,10 @@ pub fn published_slot<'a>(declared: Option<&'a str>, passed: bool) -> (slot: Opt
 }
 
 #[cfg(not(verus_keep_ghost))]
+use crate::files::{file_identity, resolve_program};
+#[cfg(not(verus_keep_ghost))]
+use crate::retention;
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, Environment},
     environment::{Failure, Prepared, Selected},
@@ -21,8 +25,6 @@ use crate::{
     source::{self, SourceIdentity, SourceObservation},
     verified_bindings::{self as policy, BuildStatus},
 };
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{file_identity, resolve_program, retained_artifacts::retention};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -121,7 +123,7 @@ pub struct Construction<'a> {
     inherited: Environment,
     owner_source: Option<PathBuf>,
     publication: Option<retention::Publication>,
-    _inputs: retention::ReadScope,
+    inputs: retention::Scope,
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -217,29 +219,25 @@ impl<'a> Construction<'a> {
                 .parent()
                 .ok_or("missing bootstrap report parent")?
                 .to_owned(),
-            None => chrono_harness::no_symlink_parents(root, ".chrono-harness/state")?,
+            None => crate::files::checked_path(root, ".chrono-harness/state")?,
         };
         fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
-        let inputs = retention::read_scope(root)?;
-        let directory = retention::unique_path(&parent, "bootstrap-", "")?;
-        // 整个真实生产目录共用一次发布和子孙租约，不逐文件登记。
-        let publication = retention::create_adopted(
+        let inputs = retention::scope(root)?;
+        let (directory, publication) = inputs.create(
             root,
+            &parent,
+            "bootstrap-",
             "check-original",
-            &directory,
-            true,
             json!({"publication":"started","completion":"not-established"}),
         )?;
         if publication.is_some() {
-            retention::Inventory::adopted(root)?
-                .ok_or("bootstrap retention policy disappeared")?
-                .retain_diagnostic_path(
-                    directory
-                        .strip_prefix(root)
-                        .map_err(|e| e.to_string())?
-                        .to_str()
-                        .ok_or("non UTF-8 bootstrap directory")?,
-                )?;
+            inputs.diagnostic(
+                directory
+                    .strip_prefix(root)
+                    .map_err(|e| e.to_string())?
+                    .to_str()
+                    .ok_or("non UTF-8 bootstrap directory")?,
+            )?;
         }
         let report = Report {
             schema: "chrono-bootstrap-result/v1".into(),
@@ -271,7 +269,7 @@ impl<'a> Construction<'a> {
             inherited: inherited.clone(),
             owner_source: None,
             publication,
-            _inputs: inputs,
+            inputs,
         })
     }
 
@@ -609,25 +607,18 @@ impl<'a> Construction<'a> {
                 .collect();
             // Protect both generations and all explicitly reused originals before
             // releasing the producer or replacing the selected report bytes.
-            let _slot = match (adopted, slot) {
-                (true, Some(slot)) => {
-                    retention::reference_report(self.root, slot, directory, &dependencies, None)?
+            if adopted {
+                if let Some(slot) = slot {
+                    self.inputs.reference(slot, directory, &dependencies)?;
+                } else {
+                    self.inputs.dependencies(directory, &dependencies)?;
                 }
-                (true, None) => {
-                    retention::Inventory::adopted(self.root)?
-                        .ok_or("bootstrap retention policy disappeared")?
-                        .dependencies_paths(directory, &dependencies)?;
-                    None
-                }
-                (false, _) => None,
-            };
+            }
             if let Some(publication) = self.publication.take() {
                 let completion = publication
                     .complete(json!({"status":self.report.status,"error":self.report.error}));
                 let diagnostic = if outcome.is_err() || completion.is_err() {
-                    retention::Inventory::adopted(self.root)?
-                        .ok_or("bootstrap retention policy disappeared")?
-                        .retain_diagnostic_path(directory)
+                    self.inputs.diagnostic(directory)
                 } else {
                     Ok(())
                 };
@@ -652,7 +643,7 @@ impl<'a> Construction<'a> {
                     .and_then(|_| selected.sync_all())
                     .map_err(|error| error.to_string())?;
                 if adopted {
-                    retention::settle_report(self.root, slot, directory)?;
+                    self.inputs.settle(slot, directory)?;
                 }
             }
             Ok(())

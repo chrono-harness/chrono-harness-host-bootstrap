@@ -68,7 +68,7 @@ fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFail
             .map_err(|error| error.to_string())?
             .to_str()
             .ok_or("non UTF-8 owner original report")?;
-        let digest = chrono_harness::file_identity(&published.original)?.0;
+        let digest = chrono_host_bootstrap::files::file_identity(&published.original)?.0;
         println!(
             "chrono-owner-stage-result {}",
             json!({"path":reference,"sha256":digest})
@@ -134,11 +134,10 @@ fn run() -> Result<(), BuildFailure> {
     }
 }
 
-fn execute() -> u8 {
-    match run() {
+fn finish(result: Result<(), BuildFailure>) -> u8 {
+    match result {
         Ok(()) => 0,
         Err(error) => {
-            chrono_harness::log_cli_error(&format!("E_BOOTSTRAP: {}", error.message));
             eprintln!("E_BOOTSTRAP: {}", error.message);
             error
                 .exit_code
@@ -148,7 +147,61 @@ fn execute() -> u8 {
         }
     }
 }
-
+fn logged(root: &Path, operation: &str) -> Result<u8, String> {
+    use std::{
+        io::{BufRead, BufReader, Write},
+        process::{Command, Stdio},
+    };
+    match root.join(".chrono-harness/logging.json").symlink_metadata() {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(finish(run())),
+        Err(e) => return Err(e.to_string()),
+        Ok(_) => {}
+    }
+    let mut child = Command::new("chrono-diagnostics")
+        .arg("cli-events-v1")
+        .arg(root)
+        .args(["chrono-host-bootstrap", operation])
+        .arg(std::process::id().to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("chrono-diagnostics cli-events-v1: {e}"))?;
+    let mut writer = child.stdin.take().expect("piped stdin");
+    let mut reader = BufReader::new(child.stdout.take().expect("piped stdout"));
+    let result = (|| -> Result<u8, String> {
+        let mut line = String::new();
+        reader.read_line(&mut line).map_err(|e| e.to_string())?;
+        if serde_json::from_str::<serde_json::Value>(&line).ok() != Some(json!({"ready":true})) {
+            return Err("chrono-diagnostics did not open the CLI log".into());
+        }
+        let result = run();
+        if let Err(error) = &result {
+            serde_json::to_writer(
+                &mut writer,
+                &json!({"diagnostic":format!("E_BOOTSTRAP: {}",error.message)}),
+            )
+            .map_err(|e| e.to_string())?;
+            writer.write_all(b"\n").map_err(|e| e.to_string())?;
+        }
+        let status = finish(result);
+        serde_json::to_writer(&mut writer, &json!({"exit_code":status}))
+            .map_err(|e| e.to_string())?;
+        writer
+            .write_all(b"\n")
+            .and_then(|()| writer.flush())
+            .map_err(|e| e.to_string())?;
+        Ok(status)
+    })();
+    drop(writer);
+    let status = child.wait().map_err(|e| e.to_string())?;
+    let wanted = result?;
+    if status.code() != Some(i32::from(wanted)) {
+        return Err(format!(
+            "chrono-diagnostics cli-events-v1 exited {status} after {wanted}"
+        ));
+    }
+    Ok(wanted)
+}
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
     if arguments.first().and_then(|arg| arg.to_str()) == Some("original-report-v1") {
@@ -191,13 +244,23 @@ fn main() -> ExitCode {
         [host, _] => (Some(host), "bootstrap"),
         _ => (None, ""),
     };
-    ExitCode::from(match host {
-        Some(host) => chrono_harness::logged_main_at(
-            Path::new(host),
-            "chrono-host-bootstrap",
-            operation,
-            execute,
+    let default_root = arguments
+        .windows(2)
+        .find(|pair| pair[0] == "--host-root")
+        .map(|pair| Path::new(&pair[1]))
+        .unwrap_or(Path::new("."));
+    let (root, operation) = match host {
+        Some(host) => (Path::new(host), operation),
+        None => (
+            default_root,
+            arguments.first().and_then(|arg| arg.to_str()).unwrap_or(""),
         ),
-        None => chrono_harness::logged_main("chrono-host-bootstrap", execute),
-    })
+    };
+    match logged(root, operation) {
+        Ok(code) => code.into(),
+        Err(error) => {
+            eprintln!("{error}");
+            2.into()
+        }
+    }
 }

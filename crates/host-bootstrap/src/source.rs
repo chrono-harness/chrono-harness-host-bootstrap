@@ -1,9 +1,9 @@
 //! 当前候选的 Git 观察；不执行历史程序，观察失败保留错误及已取得的字段。
 use crate::bindings::{self, Environment};
+use crate::files::resolve_program;
 pub use crate::verified_bindings::{
     SourceIdentity, SourceObservation, SourceState, source_identity,
 };
-use chrono_harness::resolve_program;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},

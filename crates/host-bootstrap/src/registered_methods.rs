@@ -15,7 +15,7 @@ pub struct Method {
     pub tool: String,
     pub argv: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
+    pub output_contract: Option<crate::compiler::OutputContract>,
 }
 
 /// Read the registration response through the supplied command transport.
@@ -32,12 +32,12 @@ pub fn read_methods(
             reason.strip_suffix('\n').unwrap_or(&reason).to_owned()
         });
     }
-    chrono_harness::decode(&output.stdout)
+    crate::codec::decode(&output.stdout)
 }
 
 pub(crate) fn methods(registry: &[u8]) -> Result<BTreeMap<String, Vec<Method>>, String> {
     read_methods(registry, |program, argument, input| {
-        let executable = chrono_harness::resolve_program(std::path::Path::new("."), program, None)?;
+        let executable = crate::files::resolve_program(std::path::Path::new("."), program, None)?;
         let mut child = Command::new(executable)
             .env_clear()
             .arg(argument)

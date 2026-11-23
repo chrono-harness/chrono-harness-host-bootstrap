@@ -1,6 +1,7 @@
 //! 工具绑定的 JSON 和原生 IO 适配；身份与选择判断复用同源证明内核。
+use crate::codec::json;
+use crate::files::{file_identity, resolve_program};
 use crate::verified_bindings::{self as policy, ConfiguredAction, DeclarationSource, Executable};
-use chrono_harness::{file_identity, json, process_fds, resolve_program};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -269,16 +270,7 @@ pub(crate) fn command(
     args: &[&str],
     environment: &Environment,
 ) -> Result<Command, String> {
-    let mut command = Command::new(program);
-    command.current_dir(root).args(args).env_clear();
-    // 租约载体由现有所有者产生，不能把继承值当成新命令的显式绑定。
-    command.envs(
-        environment
-            .iter()
-            .filter(|(key, _)| key.as_os_str() != OsStr::new(process_fds::ENV)),
-    );
-    process_fds::forward_command(&mut command, &[])?;
-    Ok(command)
+    crate::descriptors::command(root, program, args, environment)
 }
 
 pub(crate) fn capture(
