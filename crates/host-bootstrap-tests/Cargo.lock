@@ -92,10 +92,10 @@ dependencies = [
 name = "chrono-host-bootstrap-tests"
 version = "0.1.0"
 dependencies = [
- "chrono-harness",
  "chrono-host-bootstrap",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 
