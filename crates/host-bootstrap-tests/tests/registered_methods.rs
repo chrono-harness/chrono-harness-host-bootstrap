@@ -1,5 +1,4 @@
-#[path = "../../host-bootstrap/src/registered_methods.rs"]
-mod registered_methods;
+use chrono_host_bootstrap::execution::read_methods;
 
 use std::{
     os::unix::process::ExitStatusExt,
@@ -9,7 +8,7 @@ use std::{
 #[test]
 fn bootstrap_queries_the_supplied_registry_and_keeps_duplicate_methods() {
     let bytes = br#"{"projects":[],"scripts":[]}"#;
-    let result = registered_methods::read_methods(bytes, |program, arg, input| {
+    let result = read_methods(bytes, |program, arg, input| {
         assert_eq!((program, arg, input), ("chrono-judge-registration", "execution-methods", bytes.as_slice()));
         let method = serde_json::json!({"owner":"script:a","operation":"build","tool":"rustc","argv":["file with spaces"]});
         Ok(Output { status: ExitStatus::from_raw(0), stdout: serde_json::to_vec(&serde_json::json!({"build":[method,method]})).unwrap(), stderr: vec![] })
@@ -39,7 +38,7 @@ fn startup_reports_missing_tools_rejected_registries_and_broken_responses() {
             "invalid type",
         ),
     ] {
-        let failure = registered_methods::read_methods(b"{}", |_, _, _| response).unwrap_err();
+        let failure = read_methods(b"{}", |_, _, _| response).unwrap_err();
         assert!(failure.contains(error), "{failure}");
     }
 }

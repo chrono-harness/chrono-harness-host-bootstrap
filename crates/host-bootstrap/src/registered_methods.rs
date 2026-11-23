@@ -18,7 +18,8 @@ pub struct Method {
     pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
 }
 
-pub(crate) fn read_methods(
+/// Read the registration response through the supplied command transport.
+pub fn read_methods(
     registry: &[u8],
     invoke: impl FnOnce(&str, &str, &[u8]) -> Result<Output, String>,
 ) -> Result<BTreeMap<String, Vec<Method>>, String> {

@@ -1,5 +1,6 @@
 use chrono_host_bootstrap::bindings::{Declarations, Environment, NativePlatform};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fs, path::PathBuf, process::Command};
 
 fn native() -> NativePlatform {
@@ -118,7 +119,7 @@ fn real_binding(path: &PathBuf) -> Value {
         .output()
         .unwrap();
     assert!(version.status.success());
-    json!({"path":path, "sha256":chrono_harness::file_identity(path).unwrap().0,
+    json!({"path":path, "sha256":format!("{:x}", Sha256::digest(fs::read(path).unwrap())),
         "version":String::from_utf8(version.stdout).unwrap().trim()})
 }
 

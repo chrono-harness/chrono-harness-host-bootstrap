@@ -17,9 +17,9 @@ pub fn operation_argument<'a>(declared: &'a str, output: &'a str) -> (actual: &'
 }
 
 #[cfg(not(verus_keep_ghost))]
-pub use crate::registered_methods::Method;
-#[cfg(not(verus_keep_ghost))]
 pub(crate) use crate::registered_methods::methods;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::registered_methods::{Method, read_methods};
 #[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment},
