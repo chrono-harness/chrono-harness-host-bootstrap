@@ -15,3 +15,4 @@ mod registered_methods;
 pub mod shared;
 pub mod source;
 pub mod verified_bindings;
+mod verified_cargo;
