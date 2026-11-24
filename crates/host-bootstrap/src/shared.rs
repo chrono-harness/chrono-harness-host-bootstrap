@@ -125,7 +125,7 @@ fn retain(path: &Path, bytes: &[u8]) -> Result<(), String> {
         write_new(path, bytes)
     }
 }
-fn replace(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
+pub(crate) fn replace(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     let parent = path.parent().ok_or("missing startup destination parent")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     let mut temporary = tempfile::Builder::new()

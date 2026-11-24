@@ -40,3 +40,7 @@ path = "tests/verified_bindings.rs"
 [[test]]
 name = "verified_cargo"
 path = "tests/verified_cargo.rs"
+
+[[test]]
+name = "template"
+path = "tests/template.rs"
