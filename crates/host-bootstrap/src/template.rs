@@ -19,18 +19,11 @@ fn repository(url: &str) -> Result<&str, String> {
     let path = path.trim_end_matches('/');
     let path = path.strip_suffix(".git").unwrap_or(path);
     let (owner, name) = path.split_once('/').ok_or_else(invalid)?;
-    let valid = |s: &str| {
-        !s.is_empty()
-            && s != "."
-            && s != ".."
-            && s.bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
-    };
-    if !(authority.eq_ignore_ascii_case("github.com")
-        || authority.eq_ignore_ascii_case("ssh.github.com"))
-        || !valid(owner)
-        || !valid(name)
-    {
+    if !crate::verified_bindings::github_repository(
+        authority.as_bytes(),
+        owner.as_bytes(),
+        name.as_bytes(),
+    ) {
         return Err(invalid());
     }
     Ok(path)
