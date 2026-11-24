@@ -268,6 +268,41 @@ pub fn fingerprint(bytes: &[u8]) -> (valid: bool)
     true
 }
 
+pub open spec fn compiler_has_path(paths: Seq<Vec<u8>>, name: Seq<u8>) -> bool {
+    exists|i: int| 0 <= i < paths.len() && (#[trigger] paths[i])@ == name
+}
+
+fn compiler_contains(paths: &[Vec<u8>], name: &[u8]) -> (found: bool)
+    ensures found == compiler_has_path(paths@,name@),
+{
+    let mut i: usize = 0;
+    while i < paths.len()
+        invariant i <= paths.len(), forall|j:int| 0 <= j < i ==> (#[trigger] paths@[j])@ != name@,
+        decreases paths.len() - i,
+    {
+        if equal_bytes(paths[i].as_slice(),name) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub fn required_compiler_paths(paths: &[Vec<u8>], required: &[String]) -> (found: bool)
+    ensures found == (required.len() > 0 && forall|i:int| 0 <= i < required.len()
+        ==> compiler_has_path(paths@,vstd::utf8::encode_utf8((#[trigger] required@[i])@))),
+{
+    if required.len() == 0 { return false; }
+    let mut i: usize = 0;
+    while i < required.len()
+        invariant i <= required.len(), required.len() > 0, forall|j:int| 0 <= j < i
+            ==> compiler_has_path(paths@,vstd::utf8::encode_utf8((#[trigger] required@[j])@)),
+        decreases required.len() - i,
+    {
+        if !compiler_contains(paths,required[i].as_str().as_bytes()) { return false; }
+        i += 1;
+    }
+    true
+}
+
 pub fn all_present(present: &Vec<bool>) -> (complete: bool)
     ensures complete == (present.len() > 0 && forall|i: int| 0 <= i < present.len() ==> present[i]),
 {
