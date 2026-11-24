@@ -226,6 +226,53 @@ fn bind_dependency(
     Ok(raw)
 }
 
+/// Admit the original compiler dependency information supplied by an independent owner check.
+pub fn check_owner_sources(
+    kind: &str,
+    output: &Path,
+    sources: &[String],
+    query: impl Fn(serde_json::Value) -> Result<serde_json::Value, String>,
+) -> Result<(), String> {
+    if sources.is_empty() {
+        return Err("no source files declared".into());
+    }
+    let mut dependency = output.as_os_str().to_os_string();
+    dependency.push(".d");
+    let dependency = PathBuf::from(dependency);
+    let raw = bounded(&dependency)?;
+    let matched = match kind {
+        "native" => {
+            let result = query(json!({"operation":"dependency-paths", "dependency":raw,
+                "stem":output.as_os_str().as_encoded_bytes()}))?;
+            let paths: Option<Vec<Vec<u8>>> =
+                serde_json::from_value(result).map_err(|e| e.to_string())?;
+            let paths = paths.ok_or("invalid native compiler dependency header")?;
+            cargo::required_compiler_paths(&paths, sources)
+        }
+        "proof" => {
+            let bindings = sources
+                .iter()
+                .map(|name| {
+                    let (digest, length) = file_identity(Path::new(name))?;
+                    Ok(json!({"path":name.as_bytes(),"sha256":digest.as_bytes(),"length":length}))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            serde_json::from_value(query(json!({"operation":"dependency-matches","dependency":raw,
+                "targets":[dependency.as_os_str().as_encoded_bytes(),output.as_os_str().as_encoded_bytes()],
+                "sources":bindings}))?).map_err(|e| e.to_string())?
+        }
+        _ => return Err(format!("unknown compiler output kind {kind:?}")),
+    };
+    if matched {
+        Ok(())
+    } else {
+        Err(format!(
+            "{kind} compiler sources differ for {}",
+            output.display()
+        ))
+    }
+}
+
 fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Result<(), String> {
     if !cargo::content_matches(
         &crate::files::sha256(bytes),

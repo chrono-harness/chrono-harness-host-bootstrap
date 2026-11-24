@@ -93,6 +93,15 @@ fn run() -> Result<(), BuildFailure> {
             println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        [command, kind, output, sources @ ..] if command == "check-compiler-sources" => {
+            proved_build::check_owner_sources(
+                kind,
+                Path::new(output),
+                sources,
+                chrono_host_bootstrap::compiler::compiler,
+            )
+            .map_err(|error| BuildFailure::from(format!("E_VERUS_COVERAGE: {error}")))
+        }
         [command, host, config] if command == "compile" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             proved_build::build(

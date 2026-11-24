@@ -19,6 +19,31 @@ use expectation::expect;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_source_check_requires_every_declared_byte_path() {
+    let src = "a".to_owned();
+    let absent = "ab".to_owned();
+    let mut name = Vec::new();
+    name.extend_from_slice(src.as_str().as_bytes());
+    let observed = vec![name];
+    let same = vec![src.clone(),src.clone()];
+    assert(observed@[0]@ == vstd::utf8::encode_utf8(src@));
+    assert(cargo::compiler_has_path(observed@,vstd::utf8::encode_utf8(src@)));
+    assert forall|i:int| 0 <= i < same.len() implies
+        cargo::compiler_has_path(observed@,vstd::utf8::encode_utf8((#[trigger] same@[i])@)) by {
+        assert(i == 0 || i == 1);
+    }
+    expect(cargo::required_compiler_paths(&observed,&same));
+    proof {
+        reveal_strlit("a"); reveal_strlit("ab");
+        vstd::utf8::encode_utf8_decode_utf8(src@);
+        vstd::utf8::encode_utf8_decode_utf8(absent@);
+        assert(vstd::utf8::encode_utf8(src@) != vstd::utf8::encode_utf8(absent@));
+    }
+    expect(!cargo::required_compiler_paths(&observed,&vec![src,absent]));
+    expect(!cargo::required_compiler_paths(&observed,&vec![]));
+}
+
 proof fn library_literal_bytes()
     ensures vstd::utf8::encode_utf8("d/libn-a.rlib"@) == seq![100u8,47,108,105,98,110,45,97,46,114,108,105,98],
         vstd::utf8::encode_utf8("d/libn-a.rmeta"@) == seq![100u8,47,108,105,98,110,45,97,46,114,109,101,116,97],
