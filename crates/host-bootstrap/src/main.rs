@@ -5,7 +5,7 @@ use chrono_host_bootstrap::{
     download, lifecycle, owner, profile, proved_build, shared,
 };
 use serde_json::json;
-use std::{path::Path, process::ExitCode};
+use std::{io::Write, path::Path, process::ExitCode};
 
 fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFailure> {
     let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
@@ -92,6 +92,26 @@ fn run() -> Result<(), BuildFailure> {
         [command] if command == "--version" => {
             println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
             Ok(())
+        }
+        [command, version, commit, report, output, sources @ ..]
+            if command == "check-compiler-proof" =>
+        {
+            let contract = chrono_host_bootstrap::compiler::OutputContract {
+                version: version.clone(),
+                commit: commit.clone(),
+            };
+            let original = proved_build::check_owner_proof(
+                &contract,
+                Path::new(report),
+                Path::new(output),
+                sources,
+                chrono_host_bootstrap::compiler::compiler,
+            )
+            .map_err(|error| BuildFailure::from(format!("E_VERUS_COVERAGE: {error}")))?;
+            std::io::stdout()
+                .lock()
+                .write_all(original.as_bytes())
+                .map_err(|error| BuildFailure::from(error.to_string()))
         }
         [command, kind, output, sources @ ..] if command == "check-compiler-sources" => {
             proved_build::check_owner_sources(

@@ -273,6 +273,28 @@ pub fn check_owner_sources(
     }
 }
 
+/// Collect the original result of a required owner operation after execution.
+pub fn check_owner_proof(
+    contract: &OutputContract,
+    report: &Path,
+    output: &Path,
+    sources: &[String],
+    query: impl Fn(serde_json::Value) -> Result<serde_json::Value, String>,
+) -> Result<String, String> {
+    let original = String::from_utf8(bounded(report)?).map_err(|e| e.to_string())?;
+    let artifact = fs::symlink_metadata(output).map_err(|e| e.to_string())?;
+    if !cargo::nonempty_artifact(artifact.file_type().is_file(), artifact.len()) {
+        return Err(format!("missing compiler library: {}", output.display()));
+    }
+    let verdict = query(json!({"operation":"proof-rows","contract":contract,"rows":[&original]}))?;
+    let rows: Vec<Option<bool>> = serde_json::from_value(verdict).map_err(|e| e.to_string())?;
+    if !cargo::one_successful_proof(&rows) {
+        return Err(format!("unexpected verifier report: {}", report.display()));
+    }
+    check_owner_sources("proof", output, sources, query)?;
+    Ok(original)
+}
+
 fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Result<(), String> {
     if !cargo::content_matches(
         &crate::files::sha256(bytes),

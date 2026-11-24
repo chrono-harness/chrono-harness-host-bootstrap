@@ -20,6 +20,19 @@ use expectation::expect;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn required_operation_has_one_successful_report_and_a_nonempty_regular_library() {
+    expect(cargo::one_successful_proof(&[Some(true)]));
+    expect(!cargo::one_successful_proof(&[]));
+    expect(!cargo::one_successful_proof(&[None]));
+    expect(!cargo::one_successful_proof(&[Some(false)]));
+    expect(!cargo::one_successful_proof(&[Some(true), Some(true)]));
+    expect(cargo::nonempty_artifact(true, 1));
+    expect(!cargo::nonempty_artifact(true, 0));
+    expect(!cargo::nonempty_artifact(false, 5));
+}
+
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn native_source_check_requires_every_declared_byte_path() {
     let src = "a".to_owned();
     let absent = "ab".to_owned();

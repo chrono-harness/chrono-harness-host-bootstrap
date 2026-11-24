@@ -303,6 +303,16 @@ pub fn required_compiler_paths(paths: &[Vec<u8>], required: &[String]) -> (found
     true
 }
 
+pub fn nonempty_artifact(regular: bool, length: u64) -> (present: bool)
+    ensures present == (regular && length > 0),
+{ regular && length > 0 }
+
+pub fn one_successful_proof(rows: &[Option<bool>]) -> (accepted: bool)
+    ensures accepted == (rows.len() == 1 && rows@[0] == Some(true)),
+{
+    rows.len() == 1 && rows[0] == Some(true)
+}
+
 pub fn all_present(present: &Vec<bool>) -> (complete: bool)
     ensures complete == (present.len() > 0 && forall|i: int| 0 <= i < present.len() ==> present[i]),
 {

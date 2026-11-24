@@ -85,3 +85,61 @@ fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
     fs::remove_file(dependency).unwrap();
     assert!(check_owner_sources("native", &output, &sources, |_| panic!()).is_err());
 }
+
+#[test]
+fn required_proof_collects_the_original_report_library_and_sources() {
+    use chrono_host_bootstrap::compiler::OutputContract;
+    use chrono_host_bootstrap::proved_build::check_owner_proof;
+    use serde_json::json;
+    use std::fs;
+
+    let root = tempfile::tempdir().unwrap();
+    let output = root.path().join("proof.rlib");
+    let dep = root.path().join("proof.rlib.d");
+    let report = root.path().join("proof.json");
+    let src = root.path().join("root.rs");
+    let sources = vec![src.to_str().unwrap().to_owned()];
+    let contract = OutputContract {
+        version: "version".into(),
+        commit: "commit".into(),
+    };
+    let original = "{ \"compiler\": \"report\" }\n";
+    fs::write(&report, original).unwrap();
+    fs::write(&dep, b"original manifest").unwrap();
+    fs::write(&src, b"original source").unwrap();
+    assert!(check_owner_proof(&contract, &report, &output, &sources, |_| panic!()).is_err());
+    fs::write(&output, b"").unwrap();
+    assert!(check_owner_proof(&contract, &report, &output, &sources, |_| panic!()).is_err());
+    fs::write(&output, b"compiled library").unwrap();
+    for (rows, expected) in [
+        (json!([true]), true),
+        (json!([false]), false),
+        (json!([null]), false),
+        (json!([]), false),
+        (json!([true, true]), false),
+    ] {
+        let admitted = check_owner_proof(&contract, &report, &output, &sources, |request| {
+            match request["operation"].as_str() {
+                Some("proof-rows") => {
+                    assert_eq!(
+                        request,
+                        json!({"operation":"proof-rows","contract":contract,"rows":[original]})
+                    );
+                    Ok(rows.clone())
+                }
+                Some("dependency-matches") if expected => Ok(json!(true)),
+                _ => panic!("unexpected protocol call {request}"),
+            }
+        });
+        assert_eq!(admitted.is_ok(), expected);
+        if expected {
+            assert_eq!(admitted.unwrap(), original);
+        }
+    }
+    fs::remove_file(&dep).unwrap();
+    assert!(
+        check_owner_proof(&contract, &report, &output, &sources, |_| Ok(json!([true]))).is_err()
+    );
+    fs::remove_file(&report).unwrap();
+    assert!(check_owner_proof(&contract, &report, &output, &sources, |_| panic!()).is_err());
+}
