@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+if [[ $# -gt 1 || ( $# -eq 1 && $1 != --native ) ]]; then
+  echo 'usage: ./check.sh [--native]' >&2
+  exit 2
+fi
 mkdir -p target
 scratch=$(mktemp -d "$(pwd -P)/target/check.XXXXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT

@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "status": "active",
+  "owners": [
+    "host",
+    "host-bootstrap",
+    "host-bootstrap-tests"
+  ],
+  "projects": [
+    {
+      "id": "host-bootstrap",
+      "kind": "production",
+      "manifest": "crates/host-bootstrap/Cargo.toml",
+      "lockfile": "crates/host-bootstrap/Cargo.lock",
+      "root": "crates/host-bootstrap",
+      "test_project": "host-bootstrap-tests",
+      "actions": {
+        "verify_bindings": {
+          "operation": "verify.bootstrap-bindings",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.bootstrap-bindings.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings.rlib.d",
+            "crates/host-bootstrap/src/verified_bindings.rs",
+            "-o",
+            ".chrono-harness/state/verify.bootstrap-bindings.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "host-bootstrap-tests",
+      "kind": "test",
+      "manifest": "crates/host-bootstrap-tests/Cargo.toml",
+      "lockfile": "crates/host-bootstrap-tests/Cargo.lock",
+      "root": "crates/host-bootstrap-tests",
+      "tests_for": "host-bootstrap",
+      "actions": {
+        "verify_bindings": {
+          "operation": "verify.bootstrap-bindings-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib.d",
+            "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "-o",
+            ".chrono-harness/state/verify.bootstrap-bindings-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "execute": {
+          "operation": "host-bootstrap.owner-check",
+          "tool": "bash",
+          "argv": [
+            "./check.sh",
+            "--native"
+          ]
+        },
+        "verify_cargo": {
+          "operation": "verify.bootstrap-cargo-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib.d",
+            "crates/host-bootstrap-tests/tests/verified_cargo.rs",
+            "-o",
+            ".chrono-harness/state/verify.bootstrap-cargo-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      },
+      "language": "rust"
+    }
+  ],
+  "scripts": []
+}
