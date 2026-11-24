@@ -31,3 +31,5 @@ bootstrap 独立构建。两个 Cargo 项目从本仓和 crates.io 解析源码�
 独立宿主可用 `chrono-host-bootstrap check-compiler-sources native <dep-info 主名> <声明源>...` 核对原生 Rust 编译依赖。它读取同名 `.d` 并检查每一条声明源。Verus 的 `check-compiler-sources proof <输出库> <声明源>...` 读取库附带的 `.d`，核对输出目标和全部声明源的实际路径、长度及 SHA-256。两种调用均通过宿主 PATH 中的 `chrono-harness compiler-output-v1` 解析原件，拒绝时报告 `E_VERUS_COVERAGE`。
 
 需要在全部编译调用结束后收取证明结果的宿主，为每个登记操作保留本次的独立报告和输出库，并运行 `chrono-host-bootstrap check-compiler-proof <Verus 版本> <commit> <原 stdout JSON> <输出库> <声明源>...`。程序要求库是非空普通文件，通过 runner 的 `proof-rows` 核对上报的版本、commit 和整根结果，再给 `dependency-matches` 核对目标、路径、字节数和 SHA-256。成功时返回原报告字节；缺原件或有一项不合格时报 `E_VERUS_COVERAGE`。宿主从该次专属输出目录分别收取每个必需操作。
+
+原生 Rust 检查通过已安装 runner 的 `compiler-output-v1 dependency-header` 读取 rustc 当时写下的目标主名。复用 Cargo 缓存时，目录别名和包含 `..` 的路径须实际解析到本次选中库的同一个普通 dep-info 文件；另一个目录中的硬链接和指向该文件的符号链接会被拒绝。

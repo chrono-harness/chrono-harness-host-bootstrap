@@ -71,16 +71,50 @@ fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
         });
         assert_eq!(result.is_ok(), verdict);
     }
-    for observed in [json!([path.as_bytes()]), json!([]), json!(null), json!({})] {
+    let stem = output.as_os_str().as_encoded_bytes();
+    for (observed, expected) in [
+        (json!([stem, [path.as_bytes()]]), true),
+        (json!([stem, []]), false),
+        (json!(null), false),
+        (json!({}), false),
+    ] {
         let result = check_owner_sources("native", &output, &sources, |request| {
             assert_eq!(
                 request,
-                json!({"operation":"dependency-paths","dependency":raw.as_slice(),"stem":output.as_os_str().as_encoded_bytes()})
+                json!({"operation":"dependency-header","dependency":raw.as_slice()})
             );
             Ok(observed.clone())
         });
-        assert_eq!(result.is_ok(), observed == json!([path.as_bytes()]));
+        assert_eq!(result.is_ok(), expected);
     }
+    let nested = root.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+    let alias = nested.join("../proof.rlib");
+    assert!(
+        check_owner_sources("native", &output, &sources, |_| Ok(json!([
+            alias.as_os_str().as_encoded_bytes(),
+            [path.as_bytes()]
+        ])))
+        .is_ok()
+    );
+    let unrelated = root.path().join("another");
+    fs::hard_link(&dependency, root.path().join("another.d")).unwrap();
+    assert!(
+        check_owner_sources("native", &output, &sources, |_| Ok(json!([
+            unrelated.as_os_str().as_encoded_bytes(),
+            [path.as_bytes()]
+        ])))
+        .is_err()
+    );
+    let linked = root.path().join("linked");
+    std::os::unix::fs::symlink(&dependency, root.path().join("linked.d")).unwrap();
+    assert!(
+        check_owner_sources("native", &output, &sources, |_| Ok(json!([
+            linked.as_os_str().as_encoded_bytes(),
+            [path.as_bytes()]
+        ])))
+        .is_err()
+    );
     assert!(check_owner_sources("proof", &output, &[], |_| panic!()).is_err());
     fs::remove_file(dependency).unwrap();
     assert!(check_owner_sources("native", &output, &sources, |_| panic!()).is_err());
