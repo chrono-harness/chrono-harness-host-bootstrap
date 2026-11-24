@@ -14,4 +14,4 @@
 
 ## 本仓验证
 
-产品位于 [`crates/host-bootstrap`](../crates/host-bootstrap)。原生测试位于 [`crates/host-bootstrap-tests`](../crates/host-bootstrap-tests)。在仓库根目录运行 `mise exec -- ./check.sh` 执行本仓的检查。
+产品位于 [`crates/host-bootstrap`](../crates/host-bootstrap)。原生测试位于 [`crates/host-bootstrap-tests`](../crates/host-bootstrap-tests)。在仓库根目录运行 `mise exec -- ./check.sh` 按 Git 变更选择工具绑定和 Cargo 模块的生产证明、独立边界预期和候选 bootstrap 自己的编译器启动与收集检查。GitHub 汇总读取固定候选的单元原件。
