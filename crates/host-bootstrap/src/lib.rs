@@ -17,6 +17,8 @@ pub mod files;
 pub mod lifecycle;
 pub mod original;
 pub mod owner;
+#[cfg(not(verus_keep_ghost))]
+pub mod owner_proof;
 pub mod profile;
 pub mod proved_build;
 mod registered_methods;
