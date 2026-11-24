@@ -4,11 +4,11 @@ use super::artifact_identity;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_bindings::artifact_identity;
 use artifact_identity::{equal_bytes, equal_text};
-#[cfg(not(verus_keep_ghost))]
-use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 use vstd::slice::{slice_subrange, slice_to_vec};
+#[cfg(not(verus_keep_ghost))]
+use vstd::{pervasive::VecAdditionalExecFns, prelude::verus};
 
 verus! {
 
@@ -67,14 +67,33 @@ pub open spec fn selected_target(
         && artifact.target.crate_types[0]@ == kind
 }
 
-pub fn artifact_selected(artifact: &Artifact, manifest: &str, source: &str, name: &str, kind: &str) -> (selected: bool)
-    ensures selected == selected_target(artifact, manifest@, source@, name@, kind@),
+fn target_fields_match(artifact: &Artifact, manifest: &str, source: &str, name: &str, kind: &str, crate_type: &str) -> (selected: bool)
+    ensures selected == (artifact.manifest_path@ == manifest@ && artifact.target.src_path@ == source@
+        && artifact.target.name@ == name@ && artifact.target.kind.len() == 1
+        && artifact.target.kind[0]@ == kind@ && artifact.target.crate_types.len() == 1
+        && artifact.target.crate_types[0]@ == crate_type@),
 {
     equal_text(artifact.manifest_path.as_str(), manifest)
         && equal_text(artifact.target.src_path.as_str(), source)
         && equal_text(artifact.target.name.as_str(), name)
         && artifact.target.kind.len() == 1 && equal_text(artifact.target.kind[0].as_str(), kind)
-        && artifact.target.crate_types.len() == 1 && equal_text(artifact.target.crate_types[0].as_str(), kind)
+        && artifact.target.crate_types.len() == 1 && equal_text(artifact.target.crate_types[0].as_str(), crate_type)
+}
+
+pub fn artifact_selected(artifact: &Artifact, manifest: &str, source: &str, name: &str, kind: &str) -> (selected: bool)
+    ensures selected == selected_target(artifact, manifest@, source@, name@, kind@),
+{ target_fields_match(artifact, manifest, source, name, kind, kind) }
+
+pub fn library_selected(
+    artifact: &Artifact, package_id: &str, manifest: &str, source: &str, name: &str, kind: &str,
+) -> (selected: bool)
+    ensures selected == (artifact.package_id@ == package_id@ && artifact.manifest_path@ == manifest@
+        && artifact.target.src_path@ == source@ && artifact.target.name@ == name@
+        && artifact.target.kind.len() == 1 && artifact.target.kind[0]@ == kind@
+        && artifact.target.crate_types.len() == 1 && artifact.target.crate_types[0]@ == "lib"@),
+{
+    equal_text(artifact.package_id.as_str(), package_id)
+        && target_fields_match(artifact, manifest, source, name, kind, "lib")
 }
 
 pub fn diagnostic_rejected(level: &str) -> (rejected: bool)
@@ -428,6 +447,92 @@ pub fn compiler_library_paths(directory: &[u8], name: &[u8], filenames: &Vec<Str
     outputs.push(slice_to_vec(first));
     outputs.push(slice_to_vec(second));
     Some(LibraryPaths { dependency, outputs })
+}
+
+/// A single-job cargo-verus invocation prints an anonymous proof immediately
+/// before its compiler artifact. The caller supplies a stable index per requested target.
+pub enum SerialEvent {
+    Proof,
+    Artifact { selected: Option<usize>, fresh: bool },
+    Note,
+    Error,
+    Finished { success: bool },
+}
+
+pub struct SerialProofs {
+    seen: Vec<bool>,
+    pending: bool,
+    finished: bool,
+}
+
+pub open spec fn serial_accepts(seen: Seq<bool>, pending: bool, finished: bool, event: SerialEvent) -> bool {
+    !finished && match event {
+        SerialEvent::Proof => !pending,
+        SerialEvent::Artifact { selected: Some(i), fresh } =>
+            pending && !fresh && i < seen.len() && !seen[i as int],
+        SerialEvent::Artifact { selected: None, .. } | SerialEvent::Note => !pending,
+        SerialEvent::Error => false,
+        SerialEvent::Finished { success } => !pending && success,
+    }
+}
+
+impl SerialProofs {
+    pub closed spec fn bound(&self) -> Seq<bool> { self.seen@ }
+    pub closed spec fn waiting(&self) -> bool { self.pending }
+    pub closed spec fn ended(&self) -> bool { self.finished }
+
+    pub fn new(count: usize) -> (state: Self)
+        ensures state.bound() == Seq::new(count as nat, |i: int| false),
+            !state.waiting(), !state.ended(),
+    {
+        let seen = vec![false; count];
+        assert(seen@ =~= Seq::new(count as nat, |i: int| false));
+        Self { seen, pending: false, finished: false }
+    }
+
+    /// Any rejection leaves the state unchanged. The reader stops on that record.
+    pub fn accept(&mut self, event: SerialEvent) -> (ok: bool)
+        ensures
+            ok == serial_accepts(old(self).bound(), old(self).waiting(), old(self).ended(), event),
+            self.bound() == match event {
+                SerialEvent::Artifact { selected: Some(i), .. } if ok => old(self).bound().update(i as int, true),
+                _ => old(self).bound(),
+            },
+            self.waiting() == if !ok { old(self).waiting() } else { event is Proof },
+            self.ended() == (old(self).ended() || (ok && event is Finished)),
+    {
+        if self.finished { return false; }
+        match event {
+            SerialEvent::Proof if !self.pending => { self.pending = true; }
+            SerialEvent::Artifact { selected: Some(i), fresh } => {
+                if !self.pending || fresh || i >= self.seen.len() || self.seen[i] { return false; }
+                self.seen.set(i, true);
+                self.pending = false;
+            }
+            SerialEvent::Artifact { selected: None, .. } | SerialEvent::Note => {
+                if self.pending { return false; }
+            }
+            SerialEvent::Finished { success: true } if !self.pending => { self.finished = true; }
+            _ => return false,
+        }
+        true
+    }
+
+    pub fn complete(&self) -> (ok: bool)
+        ensures ok == (self.ended() && !self.waiting() && self.bound().len() > 0
+            && forall|i: int| 0 <= i < self.bound().len() ==> self.bound()[i]),
+    {
+        if !self.finished || self.pending || self.seen.len() == 0 { return false; }
+        let mut i = 0;
+        while i < self.seen.len()
+            invariant 0 <= i <= self.seen.len(), forall|j: int| 0 <= j < i ==> self.seen@[j],
+            decreases self.seen.len() - i,
+        {
+            if !self.seen[i] { return false; }
+            i += 1;
+        }
+        true
+    }
 }
 
 /// matches 由调用方核对点名库／原证明或最终二进制的实际字节后产生。

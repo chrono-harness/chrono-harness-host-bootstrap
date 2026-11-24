@@ -3,6 +3,8 @@
 
 pub mod bindings;
 #[cfg(not(verus_keep_ghost))]
+pub mod cargo_proofs;
+#[cfg(not(verus_keep_ghost))]
 mod codec;
 #[cfg(not(verus_keep_ghost))]
 pub mod compiler;
