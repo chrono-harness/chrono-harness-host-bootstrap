@@ -25,6 +25,10 @@ pub mod owner;
 pub mod profile;
 
 #[cfg(verus_keep_ghost)]
+#[path = "environment.rs"]
+pub mod environment;
+
+#[cfg(verus_keep_ghost)]
 #[path = "execution.rs"]
 pub mod execution;
 #[cfg(verus_keep_ghost)]
@@ -455,12 +459,16 @@ pub fn probe_action(ready: bool, cargo: bool) -> (out: ProbeAction)
     else { ProbeAction::AddFormat }
 }
 
+pub open spec fn valid_environment_key(bytes: Seq<u8>) -> bool {
+    bytes.len() > 0
+        && !(bytes.len() >= 7 && bytes[0] == 67 && bytes[1] == 72
+            && bytes[2] == 82 && bytes[3] == 79 && bytes[4] == 78
+            && bytes[5] == 79 && bytes[6] == 95)
+        && forall|i: int| 0 <= i < bytes.len() ==> bytes[i] != 0 && bytes[i] != 61
+}
+
 pub fn environment_key(bytes: &[u8]) -> (valid: bool)
-    ensures valid <==> (bytes@.len() > 0
-        && !(bytes@.len() >= 7 && bytes@[0] == 67 && bytes@[1] == 72
-            && bytes@[2] == 82 && bytes@[3] == 79 && bytes@[4] == 78
-            && bytes@[5] == 79 && bytes@[6] == 95)
-        && forall|i: int| 0 <= i < bytes@.len() ==> bytes@[i] != 0 && bytes@[i] != 61),
+    ensures valid == valid_environment_key(bytes@),
 {
     if bytes.len() == 0 || byte_prefix(bytes, &[67u8, 72, 82, 79, 78, 79, 95]) { return false; }
     let mut i = 0;

@@ -38,7 +38,7 @@ library=${metadata%/*}/${stem%.rmeta}
 
 src=crates/host-bootstrap/src
 tests=crates/host-bootstrap-tests/tests
-binding_modules=(artifact_identity.rs construction.rs lifecycle.rs owner.rs profile.rs execution.rs original.rs)
+binding_modules=(artifact_identity.rs environment.rs construction.rs lifecycle.rs owner.rs profile.rs execution.rs original.rs)
 native_sources=(src/template.rs src/lib.rs src/verified_bindings.rs src/verified_cargo.rs src/cargo_proofs.rs src/proved_build.rs)
 "$bootstrap" check-compiler-sources native "$library" "${native_sources[@]}" "${binding_modules[@]/#/src/}"
 

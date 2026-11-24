@@ -1,12 +1,127 @@
 //! 显式环境选择与 Rustup 调用；不修改进程全局环境或全局默认工具链。
+#[cfg(verus_keep_ghost)]
+use super::{environment_key, environment_value, host_variable, valid_environment_key};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings as policy;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::{environment_key, environment_value, host_variable};
+use vstd::prelude::*;
+
+verus! {
+
+pub fn explicit_binding(key: &[u8], value: &[u8]) -> (valid: bool)
+    ensures valid == (valid_environment_key(key@)
+        && forall|i: int| 0 <= i < value.len() ==> value[i] != 0),
+{
+    environment_key(key) && environment_value(value)
+}
+
+// The erased index identifies the first failure in the proof.
+pub enum HostSelectionError<E> { Empty, Key(Ghost<int>), Path(Ghost<int>, E) }
+
+pub open spec fn allowed(row: (String, String, bool)) -> bool {
+    !row.2 && (row.0@ == "HOME"@ || row.0@ == "CARGO_HOME"@ || row.0@ == "TMPDIR"@)
+}
+
+pub open spec fn resolved<P, E, F>(entry: (String, String, bool), path: P, resolve: F) -> bool
+    where F: Fn(&String) -> Result<P, E>,
+{
+    allowed(entry) && resolve.ensures((&entry.1,), Ok::<P, E>(path))
+}
+
+pub open spec fn could_resolve<P, E, F>(entry: (String, String, bool), resolve: F) -> bool
+    where F: Fn(&String) -> Result<P, E>,
+{
+    exists|path: P| #[trigger] resolved(entry, path, resolve)
+}
+
+pub open spec fn prior<P, E, F>(rows: &[(String, String, bool)], i: int, resolve: F) -> bool
+    where F: Fn(&String) -> Result<P, E>,
+{
+    0 <= i < rows.len()
+        && forall|j: int| 0 <= j < i ==> #[trigger] could_resolve(rows[j], resolve)
+}
+
+pub open spec fn host_outcome<P, E, F>(rows: &[(String, String, bool)], resolve: F, out: Result<Vec<P>, HostSelectionError<E>>) -> bool
+    where F: Fn(&String) -> Result<P, E>,
+{
+    match out {
+        Ok(paths) => rows.len() > 0 && paths.len() == rows.len()
+                && forall|i: int| 0 <= i < rows.len() ==> resolved(rows[i], paths[i], resolve),
+        Err(HostSelectionError::Empty) => rows.len() == 0,
+        Err(HostSelectionError::Key(i)) => prior(rows, i@, resolve) && !allowed(rows[i@]),
+        Err(HostSelectionError::Path(i, e)) => prior(rows, i@, resolve) && allowed(rows[i@])
+                && resolve.ensures((&rows[i@].1,), Err::<P, E>(e)),
+    }
+}
+
+/// Return paths in the same order as these entries once every admission and path check succeeds.
+fn selected_paths<P, E, F>(rows: &[(String, String, bool)], resolve: F)
+    -> (out: Result<Vec<P>, HostSelectionError<E>>)
+    where F: Fn(&String) -> Result<P, E>,
+    requires forall|value: &String| resolve.requires((value,)),
+    ensures host_outcome(rows, resolve, out),
+{
+    let mut paths = Vec::new();
+    if rows.len() == 0 { return Err(HostSelectionError::Empty); }
+    let mut i = 0usize;
+    while i < rows.len()
+        invariant
+            i <= rows.len(), rows.len() > 0, paths.len() == i,
+            forall|value: &String| resolve.requires((value,)),
+            forall|j: int| 0 <= j < i ==> resolved(rows[j], paths[j], resolve),
+            forall|j: int| 0 <= j < i ==> #[trigger] could_resolve(rows[j], resolve),
+        decreases rows.len() - i,
+    {
+        let row = &rows[i];
+        assert(prior(rows, i as int, resolve));
+        if !host_variable(&row.0) || row.2 {
+            return Err(HostSelectionError::Key(Ghost(i as int)));
+        }
+        assert(allowed(rows[i as int]));
+        match resolve(&row.1) {
+            Err(e) => {
+                return Err(HostSelectionError::Path(Ghost(i as int), e));
+            },
+            Ok(path) => {
+                assert(resolved(*row, path, resolve));
+                assert(could_resolve(*row, resolve));
+                paths.push(path);
+            },
+        }
+        i += 1;
+    }
+    Ok(paths)
+}
+
+pub fn host_paths<P, E, F>(entries: Option<&[(String, String, bool)]>, resolve: F)
+    -> (out: Result<Vec<P>, HostSelectionError<E>>)
+    where F: Fn(&String) -> Result<P, E>,
+    requires forall|value: &String| resolve.requires((value,)),
+    ensures match entries {
+        None => match out { Ok(paths) => paths.len() == 0, _ => false },
+        Some(rows) => host_outcome(rows, resolve, out),
+    },
+{
+    match entries { None => Ok(Vec::new()), Some(rows) => selected_paths(rows, resolve) }
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::codec::json;
+#[cfg(not(verus_keep_ghost))]
 use crate::files::resolve_program;
+#[cfg(not(verus_keep_ghost))]
 use crate::profile::path as host_path;
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Declarations, Environment, NativePlatform, Tools},
-    verified_bindings::{self as policy, Executable},
+    verified_bindings::Executable,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     ffi::OsStr,
@@ -15,21 +130,25 @@ use std::{
 };
 
 #[derive(Debug)]
+#[cfg(not(verus_keep_ghost))]
 pub enum Failure {
     Selection(String),
     Installer(ExitStatus),
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl From<String> for Failure {
     fn from(message: String) -> Self {
         Self::Selection(message)
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<&str> for Failure {
     fn from(message: &str) -> Self {
         Self::Selection(message.into())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl std::fmt::Display for Failure {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -39,6 +158,7 @@ impl std::fmt::Display for Failure {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Prepared {
     pub environment: Environment,
     pub host_directories: Vec<PathBuf>,
@@ -47,16 +167,19 @@ pub struct Prepared {
 }
 
 #[derive(Debug)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Selected {
     pub environment: Environment,
     pub versions: Tools<String>,
     pub bindings: Option<Tools<Executable>>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn typed<T: serde::de::DeserializeOwned>(value: &Value) -> Result<T, String> {
     serde_json::from_value(value.clone()).map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Prepared {
     /// 只解析与观察声明的构建环境；不创建目录或启动进程。
     pub fn parse(root: &Path, bytes: &[u8], inherited: &Environment) -> Result<Self, String> {
@@ -73,28 +196,37 @@ impl Prepared {
             .transpose()?
             .unwrap_or_default();
         for (key, value) in &explicit {
-            if !policy::environment_key(key.as_bytes())
-                || !policy::environment_value(value.as_bytes())
-            {
+            if !explicit_binding(key.as_bytes(), value.as_bytes()) {
                 return Err("invalid bootstrap environment selection".into());
             }
             environment.insert(key.into(), value.into());
         }
-        let mut host_directories = Vec::new();
-        if let Some(values) = config.get("host_environment") {
-            let values: BTreeMap<String, String> = typed(values)?;
-            if values.is_empty() {
-                return Err("empty bootstrap host environment selection".into());
+        let host = config
+            .get("host_environment")
+            .map(typed::<BTreeMap<String, String>>)
+            .transpose()?;
+        let entries = host.map(|values| {
+            values
+                .into_iter()
+                .map(|(key, value)| {
+                    let conflict = explicit.contains_key(&key);
+                    (key, value, conflict)
+                })
+                .collect::<Vec<_>>()
+        });
+        let host_directories = host_paths(entries.as_deref(), |value| {
+            host_path(root, value, b".chrono-harness/cache/")
+        })
+        .map_err(|error| match error {
+            HostSelectionError::Empty => "empty bootstrap host environment selection".to_string(),
+            HostSelectionError::Key(_) => {
+                "invalid or conflicting bootstrap host environment selection".to_string()
             }
-            for (key, value) in values {
-                if !policy::host_variable(&key) || explicit.contains_key(&key) {
-                    return Err(
-                        "invalid or conflicting bootstrap host environment selection".into(),
-                    );
-                }
-                let selected = host_path(root, &value, b".chrono-harness/cache/")?;
-                environment.insert(key.into(), selected.as_os_str().to_owned());
-                host_directories.push(selected);
+            HostSelectionError::Path(_, error) => error,
+        })?;
+        if let Some(entries) = entries {
+            for ((key, _, _), path) in entries.into_iter().zip(&host_directories) {
+                environment.insert(key.into(), path.as_os_str().to_owned());
             }
         }
         Ok(Self {
@@ -206,6 +338,7 @@ impl Prepared {
 }
 
 /// 先解释绑定和全部环境，再允许安装；固定注册表字节由调用方提供。
+#[cfg(not(verus_keep_ghost))]
 pub fn select(
     root: &Path,
     config: &[u8],

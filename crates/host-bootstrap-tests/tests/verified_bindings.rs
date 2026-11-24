@@ -666,3 +666,156 @@ fn template_repository_checks_observed_ascii_owner_and_name_before_writing() {
 }
 
 }
+
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::environment as admission;
+#[cfg(verus_keep_ghost)]
+use policy::environment as admission;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn host_directory_admission_stops_at_the_first_unusable_entry() {
+    use admission::{HostSelectionError, host_paths};
+    let ok = |_value: &String| -> (result: Result<u64, u64>)
+        ensures result == Ok::<u64, u64>(17),
+    { Ok(17u64) };
+    let bad = |_value: &String| -> (result: Result<u64, u64>)
+        ensures result == Err::<u64, u64>(41),
+    { Err(41u64) };
+    let absent = host_paths(None, ok);
+    expect(match absent { Ok(paths) => paths.len() == 0, _ => false });
+    let empty: Vec<(String, String, bool)> = Vec::new();
+    let present_empty = host_paths(Some(empty.as_slice()), ok);
+    expect(matches!(present_empty, Err(HostSelectionError::Empty)));
+    let mut rows = Vec::new();
+    rows.push(("HOME".to_string(), "a".to_string(), false));
+    let accepted = host_paths(Some(rows.as_slice()), ok);
+    match accepted {
+        Ok(paths) => {
+            expect(paths.len() == 1);
+            assert(admission::resolved(rows[0], paths[0], ok));
+            expect(paths[0] == 17);
+        },
+        _ => expect(false),
+    }
+    rows.push(("CARGO_HOME".to_string(), "b".to_string(), true));
+    let conflict = host_paths(Some(rows.as_slice()), ok);
+    match conflict {
+        Err(HostSelectionError::Key(_)) => {},
+        Ok(_paths) => {
+            assert(admission::resolved(rows[1], _paths[1], ok));
+            expect(false);
+        },
+        Err(HostSelectionError::Path(_index, _)) => {
+            proof { assert(_index@ == 0 || _index@ == 1); }
+            expect(false);
+        },
+        _ => expect(false),
+    }
+    let path = host_paths(Some(rows.as_slice()), bad);
+    match path {
+        Err(HostSelectionError::Path(_, value)) => expect(value == 41),
+        Err(HostSelectionError::Key(_index)) => {
+            proof {
+                assert(_index@ == 1);
+                assert(admission::could_resolve(rows[0], bad));
+                let p = choose|p: u64| admission::resolved(rows[0], p, bad);
+            }
+            expect(false);
+        },
+        Ok(_paths) => {
+            assert(admission::resolved(rows[0], _paths[0], bad));
+            expect(false);
+        },
+        _ => expect(false),
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn prepared_environment_selects_all_paths_before_creating_any_directory() {
+    use chrono_host_bootstrap::bindings::Environment;
+    use chrono_host_bootstrap::environment::Prepared;
+    use serde_json::{Value, json};
+    use std::ffi::OsStr;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let mut inherited = Environment::new();
+    inherited.insert("HOME".into(), "/inherited".into());
+    inherited.insert("KEEP".into(), "retained".into());
+    let config = |explicit: Value, host: Option<Value>| {
+        let mut data = json!({"rust_toolchain":"fixture","environment":explicit});
+        if let Some(host) = host {
+            data["host_environment"] = host;
+        }
+        serde_json::to_vec(&data).unwrap()
+    };
+    let absent = Prepared::parse(root, &config(json!({}), None), &inherited).unwrap();
+    assert!(absent.host_directories.is_empty());
+    assert_eq!(absent.environment, inherited);
+    let dirs = [
+        ".chrono-harness/cache/cargo",
+        ".chrono-harness/cache/home",
+        ".chrono-harness/cache/tmp",
+    ];
+    let chosen = Prepared::parse(
+        root,
+        &config(
+            json!({"EXPLICIT":"one"}),
+            Some(json!({
+                "HOME":dirs[1], "CARGO_HOME":dirs[0], "TMPDIR":dirs[2],
+            })),
+        ),
+        &inherited,
+    )
+    .unwrap();
+    assert_eq!(chosen.host_directories, dirs.map(|p| root.join(p)));
+    for (key, relative) in ["CARGO_HOME", "HOME", "TMPDIR"].into_iter().zip(dirs) {
+        assert_eq!(
+            chosen.environment[OsStr::new(key)],
+            root.join(relative).as_os_str()
+        );
+    }
+    assert_eq!(chosen.environment[OsStr::new("EXPLICIT")], "one");
+    assert_eq!(chosen.environment[OsStr::new("KEEP")], "retained");
+    for (explicit, host, message) in [
+        (
+            json!({}),
+            json!({}),
+            "empty bootstrap host environment selection",
+        ),
+        (
+            json!({"HOME":"explicit"}),
+            json!({"CARGO_HOME":dirs[0],"HOME":dirs[1]}),
+            "invalid or conflicting bootstrap host environment selection",
+        ),
+        (
+            json!({}),
+            json!({"CARGO_HOME":dirs[0],"UNSUPPORTED":dirs[1]}),
+            "invalid or conflicting bootstrap host environment selection",
+        ),
+        (
+            json!({}),
+            json!({"CARGO_HOME":"outside","UNSUPPORTED":dirs[1]}),
+            "invalid bootstrap path: outside",
+        ),
+        (
+            json!({"CHRONO_RESERVED":"x"}),
+            json!({}),
+            "invalid bootstrap environment selection",
+        ),
+        (
+            json!({"OK":"x\u{0}y"}),
+            json!({}),
+            "invalid bootstrap environment selection",
+        ),
+    ] {
+        let error = Prepared::parse(root, &config(explicit, Some(host)), &inherited)
+            .err()
+            .unwrap();
+        assert_eq!(error, message);
+        assert!(!root.join(".chrono-harness").exists());
+    }
+    assert_eq!(inherited[OsStr::new("HOME")], "/inherited");
+}
