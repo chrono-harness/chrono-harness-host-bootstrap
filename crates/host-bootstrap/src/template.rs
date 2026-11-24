@@ -190,3 +190,47 @@ pub fn run() -> Result<String, String> {
         },
     )
 }
+
+/// Produce the finite POSIX dispatch table for a fresh checkout. The selector only
+/// matches an observed key. Unknown keys fail before a download or link update.
+pub fn ci_install_table(check_storage_and_links: bool) -> String {
+    use crate::verified_bindings::{
+        ci_link, ci_manager, ci_mise_asset, ci_mise_digest, ci_storage,
+    };
+    use std::fmt::Write;
+    let mut table = String::from("ci_install_choice() {\n    case $1 in\n");
+    let mut row = |key: String, action: &str| {
+        writeln!(table, "        {key}) choice={action} ;;").expect("writing a String");
+    };
+    for available in [false, true] {
+        for hosted in [false, true] {
+            row(
+                format!("manager-{}{}", u8::from(available), u8::from(hosted)),
+                ci_manager(available, hosted),
+            );
+        }
+    }
+    for platform in ["Darwin/arm64", "Linux/x86_64"] {
+        let asset = ci_mise_asset(platform).expect("registered platform");
+        let digest = ci_mise_digest(asset).expect("registered asset");
+        row(
+            format!("platform-{platform}"),
+            &format!("{asset}; digest={digest}"),
+        );
+    }
+    if check_storage_and_links {
+        for inside in [false, true] {
+            row(format!("storage-{}", u8::from(inside)), ci_storage(inside));
+        }
+        for symlink in [false, true] {
+            for same_target in [false, true] {
+                row(
+                    format!("link-{}{}", u8::from(symlink), u8::from(same_target)),
+                    ci_link(symlink, same_target),
+                );
+            }
+        }
+    }
+    table.push_str("        *) choice=unsupported ;;\n    esac\n}\n");
+    table
+}

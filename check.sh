@@ -31,6 +31,10 @@ artifact() {
   ' "$scratch/cargo.jsonl"
 }
 bootstrap=$(artifact bin)
+"$bootstrap" ci-install-table-v1 manager > "$scratch/manager.expected"
+sed -n '/^ci_install_choice() {$/,/^}$/p' .chrono-harness/ci/install.sh > "$scratch/manager.actual"
+cmp "$scratch/manager.expected" "$scratch/manager.actual"
+python3 -B .chrono-harness/ci/test_install.py
 metadata=$(artifact lib)
 filename=${metadata##*/}
 stem=${filename#lib}

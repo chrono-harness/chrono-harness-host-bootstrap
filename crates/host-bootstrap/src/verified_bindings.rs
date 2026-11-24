@@ -41,6 +41,51 @@ pub use original::operation_record_matches;
 
 verus! {
 
+/// The initial shell can consume a complete finite table before any harness binary exists.
+pub fn ci_manager(available: bool, hosted: bool) -> (mode: &'static str)
+    ensures mode@ == if available { "existing"@ } else if hosted { "platform"@ } else { "unavailable"@ },
+{
+    if available { "existing" } else if hosted { "platform" } else { "unavailable" }
+}
+
+pub fn ci_mise_asset(platform: &str) -> (asset: Option<&'static str>)
+    ensures match asset {
+        Some(a) => (platform@ == "Darwin/arm64"@ && a@ == "macos-arm64"@)
+            || (platform@ == "Linux/x86_64"@ && a@ == "linux-x64"@),
+        None => platform@ != "Darwin/arm64"@ && platform@ != "Linux/x86_64"@,
+    },
+{
+    if equal_text(platform,"Darwin/arm64") { Some("macos-arm64") }
+    else if equal_text(platform,"Linux/x86_64") { Some("linux-x64") }
+    else { None }
+}
+
+pub fn ci_mise_digest(asset: &str) -> (digest: Option<&'static str>)
+    ensures match digest {
+        Some(d) => (asset@ == "macos-arm64"@ && d@ == "87b2bd5a1b88a612ee8856df23499404b115870b5a8a8e008763c7cd51c8d412"@)
+            || (asset@ == "linux-x64"@ && d@ == "9c12c24f5eac6b6357e5265e2629166cc3005459037f5d747680a99e375ff2ab"@),
+        None => asset@ != "macos-arm64"@ && asset@ != "linux-x64"@,
+    },
+{
+    if equal_text(asset,"macos-arm64") { Some("87b2bd5a1b88a612ee8856df23499404b115870b5a8a8e008763c7cd51c8d412") }
+    else if equal_text(asset,"linux-x64") { Some("9c12c24f5eac6b6357e5265e2629166cc3005459037f5d747680a99e375ff2ab") }
+    else { None }
+}
+
+pub fn ci_storage(inside_checkout: bool) -> (action: &'static str)
+    ensures action@ == if inside_checkout { "reject"@ } else { "accept"@ },
+{
+    if inside_checkout { "reject" } else { "accept" }
+}
+
+pub fn ci_link(symlink: bool, same_target: bool) -> (action: &'static str)
+    ensures action@ == if !symlink { "create"@ }
+        else if same_target { "keep"@ } else { "replace"@ },
+{
+    if !symlink { "create" }
+    else if same_target { "keep" } else { "replace" }
+}
+
 pub open spec fn github_slug_byte(b: u8) -> bool {
     48 <= b <= 57 || 65 <= b <= 90 || 97 <= b <= 122 || b == 95 || b == 46 || b == 45
 }
