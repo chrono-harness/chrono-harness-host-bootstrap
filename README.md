@@ -42,3 +42,14 @@ chrono-host-bootstrap collect-compiler-proof "$scratch" "$operation" "$verus" "$
 第一条命令使用宿主指定的 Verus，创建独占的操作目录并保存其进程原件、输出库和 dep-info 摘要。第二条命令按登记的操作、根、可执行文件、原始命令行与本轮原件逐项收取，成功时输出原报告字节；缺少或错配时返回 `E_VERUS_COVERAGE`。宿主负责该临时目录的写入隔离与回收，以及 Verus 的选择、校验和安装。判断依赖进程、编译器、文件系统与摘要算法的实际行为。
 
 原生 Rust 检查通过已安装 runner 的 `compiler-output-v1 dependency-header` 读取 rustc 当时写下的目标主名。复用 Cargo 缓存时，目录别名和包含 `..` 的路径须实际解析到本次选中库的同一个普通 dep-info 文件；另一个目录中的硬链接和指向该文件的符号链接会被拒绝。
+
+当普通构建与证明使用同一组包依赖时，在仓库内的 Cargo workspace 登记包、库及库类型的 `[[example]]` 目标，提交同一份 `Cargo.lock`。需要验证的包由宿主选择。例如已有 `identifiers`、`verifier` 两个包的宿主可运行以下命令。
+
+```sh
+chrono-host-bootstrap run-cargo-proofs "$scratch" verify-packages "$cargo_verus" crates/proofs/Cargo.toml identifiers verifier
+chrono-host-bootstrap collect-cargo-proof "$scratch" verify-packages "$cargo_verus" crates/proofs/Cargo.toml verifier "$version" "$commit" crates/proofs/verifier/Cargo.toml crates/proofs/verifier/src/lib.rs
+```
+
+从宿主根目录调用。传入已存在的本次临时目录、Verus 分发中的 `cargo-verus` 以及 workspace 根 manifest。执行器用 Cargo metadata 获取所选包的目标，用该 workspace 的锁文件在新 target 目录串行编译。宿主为每个必需的根收取一次结果，需要绑定的其他源可接在根路径后。收取成功返回该根的原始 Verus JSON。调用、根、原始流、库、验证元数据或编译器记录的输入与本轮不符时，命令以退出码 1 报告 `E_VERUS_COVERAGE`。
+
+`.d` 给出 rustc 记录的源和二进制依赖及其校验值。`.rmeta`、`.vir` 和 `.rlib` 均核对产生时的内容。库目标的 `.rlib` 在本步骤是构建产物；最终程序是否链接它需要在最终链接步骤查验。原始 stdout、stderr、收据与 Cargo target 均在调用者的临时目录中，收取结束后随该次工作清理。

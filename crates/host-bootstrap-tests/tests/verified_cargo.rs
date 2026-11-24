@@ -354,4 +354,74 @@ fn report_failure_diagnostic_errors_and_mismatched_artifacts_reject() {
     expect(binary.step(Event::Finished { success: false }).is_err());
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn serial_build_binds_each_immediately_preceding_report_to_one_required_library() {
+    use cargo::SerialEvent::*;
+    let mut state = cargo::SerialProofs::new(2);
+    expect(state.accept(Note));
+    expect(state.accept(Artifact { selected: None, fresh: true }));
+    expect(!state.accept(Artifact { selected: Some(0), fresh: false }));
+    expect(state.accept(Proof));
+    expect(!state.accept(Proof));
+    expect(!state.accept(Note));
+    expect(!state.accept(Artifact { selected: None, fresh: false }));
+    expect(!state.accept(Artifact { selected: Some(2), fresh: false }));
+    expect(!state.accept(Artifact { selected: Some(1), fresh: true }));
+    expect(!state.accept(Finished { success: true }));
+    expect(state.accept(Artifact { selected: Some(1), fresh: false }));
+    expect(state.accept(Proof));
+    expect(!state.accept(Artifact { selected: Some(1), fresh: false }));
+    expect(state.accept(Artifact { selected: Some(0), fresh: false }));
+    expect(!state.complete());
+    expect(!state.accept(Error));
+    expect(!state.accept(Finished { success: false }));
+    expect(state.accept(Finished { success: true }));
+    assert forall|i:int| 0 <= i < 2 implies state.bound()[i] by { assert(i == 0 || i == 1); }
+    expect(state.complete());
+    expect(!state.accept(Proof));
+    expect(!state.accept(Finished { success: true }));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn serial_build_with_missing_or_empty_inventory_has_no_complete_result() {
+    use cargo::SerialEvent::*;
+    let mut state = cargo::SerialProofs::new(2);
+    expect(state.accept(Proof));
+    expect(state.accept(Artifact { selected: Some(0), fresh: false }));
+    expect(state.accept(Finished { success: true }));
+    assert(!state.bound()[1]);
+    expect(!state.complete());
+    let mut empty = cargo::SerialProofs::new(0);
+    expect(empty.accept(Finished { success: true }));
+    expect(!empty.complete());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn serial_library_requires_package_manifest_source_name_kind_and_a_single_lib_crate_type() {
+    use cargo::{Artifact, Target, library_selected};
+    proof {
+        reveal_strlit("lib"); reveal_strlit("rlib"); reveal_strlit("wrong");
+        reveal_strlit("p"); reveal_strlit("m"); reveal_strlit("s"); reveal_strlit("n");
+        assert("lib"@.len() != "rlib"@.len());
+        assert("wrong"@.len() != "p"@.len());
+        assert("wrong"@.len() != "m"@.len());
+        assert("wrong"@.len() != "s"@.len());
+        assert("wrong"@.len() != "n"@.len());
+    }
+    let mut a = Artifact { package_id: "p".to_string(), manifest_path: "m".to_string(),
+        target: Target { name: "n".to_string(), src_path: "s".to_string(),
+            kind: vec!["rlib".to_string()], crate_types: vec!["lib".to_string()] },
+        filenames: Vec::new(), executable: None, fresh: false };
+    expect(library_selected(&a, "p", "m", "s", "n", "rlib"));
+    expect(!library_selected(&a, "wrong", "m", "s", "n", "rlib"));
+    expect(!library_selected(&a, "p", "wrong", "s", "n", "rlib"));
+    expect(!library_selected(&a, "p", "m", "wrong", "n", "rlib"));
+    expect(!library_selected(&a, "p", "m", "s", "wrong", "rlib"));
+    expect(!library_selected(&a, "p", "m", "s", "n", "lib"));
+    a.target.crate_types = vec!["rlib".to_string()];
+    expect(!library_selected(&a, "p", "m", "s", "n", "rlib"));
+    a.target.crate_types.push("lib".to_string());
+    expect(!library_selected(&a, "p", "m", "s", "n", "rlib"));
+}
+
 }

@@ -73,7 +73,7 @@ struct Admission {
     proof_reused: bool,
 }
 
-fn bounded(path: &Path) -> Result<Vec<u8>, String> {
+pub(crate) fn bounded(path: &Path) -> Result<Vec<u8>, String> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     if !cargo::bounded_original(metadata.file_type().is_file(), metadata.len()) {
         return Err(format!(
@@ -113,7 +113,7 @@ fn preserve_if_present(source: &Path, destination: &Path) -> Result<(), String> 
     }
 }
 
-fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
+pub(crate) fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let parent = path.parent().ok_or("missing proof parent")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
@@ -178,17 +178,36 @@ fn library_paths(
     ))
 }
 
-fn bind_dependency(
+pub(crate) enum SourcePaths {
+    Literal,
+    Resolved,
+}
+
+impl SourcePaths {
+    fn identity(&self, path: &Path) -> Result<PathBuf, String> {
+        match self {
+            Self::Literal => Ok(path.to_owned()),
+            Self::Resolved => fs::canonicalize(path).map_err(|e| e.to_string()),
+        }
+    }
+}
+
+pub(crate) fn bind_dependency(
     manifest: &Path,
     dependency: &Path,
     outputs: &[PathBuf],
     required: &[PathBuf],
+    names: SourcePaths,
 ) -> Result<Vec<u8>, String> {
     let raw = bounded(dependency)?;
     let stem = dependency.with_extension("");
     let paths = compiler::compiler::<Option<Vec<Vec<u8>>>>(json!({"operation":"dependency-paths","dependency":raw,"stem":stem.as_os_str().as_encoded_bytes()}))?
         .ok_or("E_VERUS_BUILD: compiler dependency header rejected")?;
     let mut bindings = Vec::new();
+    let required = required
+        .iter()
+        .map(|path| names.identity(path))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut seen = vec![false; required.len()];
     for path in paths {
         let text = std::str::from_utf8(&path).map_err(|e| e.to_string())?;
@@ -201,8 +220,9 @@ fn bind_dependency(
                 .join(text)
         };
         let observed = identity(&absolute)?;
+        let actual = names.identity(&absolute)?;
         for (index, expected) in required.iter().enumerate() {
-            if &absolute == expected {
+            if &actual == expected {
                 seen[index] = true;
             }
         }
@@ -603,8 +623,13 @@ fn run_attempt(
                 ) {
                     let original: Result<(Vec<Identity>, Vec<u8>), String> = (|| {
                         let (dependency, outputs) = library_paths(root, &config, &artifact)?;
-                        let metadata =
-                            bind_dependency(&library_manifest, &dependency, &outputs, &required)?;
+                        let metadata = bind_dependency(
+                            &library_manifest,
+                            &dependency,
+                            &outputs,
+                            &required,
+                            SourcePaths::Literal,
+                        )?;
                         let identities = outputs
                             .iter()
                             .map(|p| identity(p))
@@ -865,7 +890,7 @@ fn bind_final_binary(
         if !cargo::same_content(&observed, binary) {
             continue;
         }
-        bind_dependency(manifest, &path, &[output], &required)?;
+        bind_dependency(manifest, &path, &[output], &required, SourcePaths::Literal)?;
         found = true;
     }
     if !found {

@@ -93,6 +93,48 @@ fn run() -> Result<(), BuildFailure> {
             println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        [
+            command,
+            directory,
+            operation,
+            tool,
+            workspace,
+            packages @ ..,
+        ] if command == "run-cargo-proofs" => {
+            let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
+            chrono_host_bootstrap::cargo_proofs::Build::new(
+                &root, directory, operation, tool, workspace,
+            )
+            .and_then(|build| build.run(packages, &environment))
+            .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))
+        }
+        [
+            command,
+            directory,
+            operation,
+            tool,
+            workspace,
+            package,
+            version,
+            commit,
+            manifest,
+            sources @ ..,
+        ] if command == "collect-cargo-proof" => {
+            let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
+            let contract = chrono_host_bootstrap::compiler::OutputContract {
+                version: version.clone(),
+                commit: commit.clone(),
+            };
+            let report = chrono_host_bootstrap::cargo_proofs::Build::new(
+                &root, directory, operation, tool, workspace,
+            )
+            .and_then(|build| build.collect(package, &contract, manifest, sources))
+            .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))?;
+            std::io::stdout()
+                .lock()
+                .write_all(report.as_bytes())
+                .map_err(|e| BuildFailure::from(e.to_string()))
+        }
         [command, directory, operation, verifier, source] if command == "run-compiler-proof" => {
             let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
             chrono_host_bootstrap::owner_proof::Proof::new(
