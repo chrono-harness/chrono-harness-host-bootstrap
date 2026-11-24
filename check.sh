@@ -7,24 +7,53 @@ trap 'rm -rf -- "$scratch"' EXIT
 export TMPDIR="$scratch"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$scratch/cargo}"
 cargo fmt --check --manifest-path crates/host-bootstrap/Cargo.toml
-cargo build --locked --manifest-path crates/host-bootstrap/Cargo.toml
+product=crates/host-bootstrap/Cargo.toml
+cargo build --locked --message-format=json-render-diagnostics --manifest-path "$product" > "$scratch/cargo.jsonl"
 cargo fmt --check --manifest-path crates/host-bootstrap-tests/Cargo.toml
 cargo test --locked --manifest-path crates/host-bootstrap-tests/Cargo.toml
+# Select the candidate from this Cargo invocation, including nondefault target directories.
+artifact() {
+  jq -ers --arg manifest "$(pwd -P)/$product" --arg kind "$1" '
+    [.[] | select(.reason == "compiler-artifact" and .manifest_path == $manifest and
+                  .target.kind == [$kind]) |
+     if $kind == "bin" then .executable else .filenames[] | select(endswith(".rmeta")) end]
+    | if length == 1 then .[0] else error("expected one bootstrap artifact") end
+  ' "$scratch/cargo.jsonl"
+}
+bootstrap=$(artifact bin)
+metadata=$(artifact lib)
+filename=${metadata##*/}
+stem=${filename#lib}
+library=${metadata%/*}/${stem%.rmeta}
+
+src=crates/host-bootstrap/src
+tests=crates/host-bootstrap-tests/tests
+binding_modules=(artifact_identity.rs construction.rs lifecycle.rs owner.rs profile.rs execution.rs original.rs)
+native_sources=(src/lib.rs src/verified_bindings.rs src/verified_cargo.rs src/cargo_proofs.rs src/proved_build.rs)
+"$bootstrap" check-compiler-sources native "$library" "${native_sources[@]}" "${binding_modules[@]/#/src/}"
+
 prove() {
-  local label=$1 root=$2
-  local output="$scratch/$label.rlib"
-  "${VERUS:-verus}" --crate-type=lib --no-cheating --no-external-by-default --num-threads 2 \
-    --output-json --compile "--emit=link=$output,dep-info=$output.d" "$root" -o "$output" \
-    -Zchecksum-hash-algorithm=sha256 > "$scratch/proof.json" || { cat "$scratch/proof.json" >&2; return 1; }
-  cat "$scratch/proof.json"
-  jq -e '.verus.version == "0.2026.04.24.f8e1704" and
-    .verus.commit == "f8e17045c4ac17a02e566b8997070f2eecc255be" and
-    (."verification-results" | .success == true and ."is-verifying-entire-crate" == true and
-    ."encountered-error" == false and ."encountered-vir-error" == false and
-    .errors == 0 and .verified > 0)' "$scratch/proof.json" >/dev/null
-  test -s "$output" && test -s "$output.d"
+  "$bootstrap" run-compiler-proof "$scratch" "$1" "${VERUS:-verus}" "$2"
+}
+collect() {
+  local operation=$1
+  shift
+  "$bootstrap" collect-compiler-proof "$scratch" "$operation" "${VERUS:-verus}" \
+    0.2026.04.24.f8e1704 f8e17045c4ac17a02e566b8997070f2eecc255be "$@" || {
+      echo "E_VERUS_COVERAGE: $operation" >&2
+      return 1
+    }
 }
 
-prove verify.bootstrap-bindings crates/host-bootstrap/src/verified_bindings.rs
-prove verify.bootstrap-bindings-tests crates/host-bootstrap-tests/tests/verified_bindings.rs
-prove verify.bootstrap-cargo-tests crates/host-bootstrap-tests/tests/verified_cargo.rs
+prove verify.bootstrap-bindings "$src/verified_bindings.rs"
+prove verify.bootstrap-bindings-tests "$tests/verified_bindings.rs"
+prove verify.bootstrap-cargo-tests "$tests/verified_cargo.rs"
+
+included="$tests/../../host-bootstrap/src"
+collect verify.bootstrap-bindings "$src/verified_bindings.rs" "${binding_modules[@]/#/$src/}"
+collect verify.bootstrap-bindings-tests "$tests/verified_bindings.rs" "$included/verified_bindings.rs" \
+  "${binding_modules[@]/#/$included/}" "$tests/support/expect.rs" \
+  "$tests/proof_support/host-bootstrap/construction.rs" "$tests/proof_support/host-bootstrap/owner.rs" \
+  "$tests/proof_support/host-bootstrap/original.rs"
+collect verify.bootstrap-cargo-tests "$tests/verified_cargo.rs" "$included/verified_cargo.rs" \
+  "$included/artifact_identity.rs" "$tests/support/expect.rs"
