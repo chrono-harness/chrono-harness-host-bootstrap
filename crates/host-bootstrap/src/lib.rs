@@ -26,5 +26,6 @@ pub mod report_query;
 mod retention;
 pub mod shared;
 pub mod source;
+pub mod template;
 pub mod verified_bindings;
 pub mod verified_cargo;

@@ -25,3 +25,5 @@
 | `platform` | 无 | 运行平台的 system 和 machine |
 
 bootstrap 独立构建。两个 Cargo 项目从本仓和 crates.io 解析源码。运行宿主构建时，PATH 中的 `chrono-harness` 负责准入编译器输出、检查保留的进程证据和管理登记产物。原生子进程继承真实的 Unix 文件描述符。即使 bootstrap 提前退出，仍在工作的子进程继续持有相关租约。配置了 `.chrono-harness/logging.json` 的宿主通过已安装的 `chrono-diagnostics cli-events-v1` 写入滚动日志。
+
+从 GitHub 模板创建的宿主在仓库根目录运行 `chrono-host-bootstrap prepare-template`。程序从声明的 GitHub origin 识别仓库，通过匹配的 Actions 事件或远端 HEAD 取得默认分支，并更新 `.chrono-harness/template-answers.yml` 的两个身份字段。选装 `chrono-pr` 时，从本仓 `pr-policy.json` 生成 `pr.json`。选装 `chrono-instructions` 时，调用已安装的 `sync-rules`。成功打印当前仓库和分支并退出 0，输入或命令出错时从 stderr 输出原因并退出 2。

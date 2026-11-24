@@ -204,6 +204,18 @@ fn logged(root: &Path, operation: &str) -> Result<u8, String> {
 }
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if matches!(arguments.as_slice(), [arg] if arg == "prepare-template") {
+        return match chrono_host_bootstrap::template::run() {
+            Ok(message) => {
+                println!("{message}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("E_BOOTSTRAP_TEMPLATE: {error}");
+                2.into()
+            }
+        };
+    }
     if arguments.first().and_then(|arg| arg.to_str()) == Some("original-report-v1") {
         use std::io::Write;
         let read = || -> Result<(), String> {
