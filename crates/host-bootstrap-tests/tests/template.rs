@@ -94,6 +94,7 @@ fn foreign_event_uses_remote_head_and_disabling_products_clears_old_pr_settings(
     for origin in [
         "git@github.com:Other/B.git",
         "ssh://git@ssh.github.com:443/Other/B.git/",
+        "https://GitHub.COM/Other/B",
     ] {
         let result = run(
             root,
@@ -119,6 +120,8 @@ fn invalid_origin_default_and_sync_failure_preserve_preexisting_files() {
         "https://github.com.evil/owner/repo",
         "git@github.com:only-owner",
         "https://github.com/owner/repo/tree",
+        "https://github.com/./repo",
+        "https://github.com/owner/..",
     ] {
         assert!(run(root, None, &[(ORIGIN, Ok(invalid))]).is_err());
     }

@@ -630,4 +630,39 @@ fn sha256_allows_zero_but_requires_exact_lowercase_hex_length() {
     expect(direct && !missing && registry && !invalid_registry);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn template_repository_checks_observed_ascii_owner_and_name_before_writing() {
+    broadcast use vstd::array::group_array_axioms;
+    let mut path = [65u8, 45, 46, 95, 49];
+    let host = "github.com".as_bytes();
+    let ssh = "ssh.github.com".as_bytes();
+    let name = [120u8];
+    let dot = [46u8];
+    let dotdot = [46u8,46];
+    let outside = [255u8];
+    proof {
+        assert forall|i:int| 0 <= i < path.len() implies policy::github_slug_byte(path@[i]) by {
+            assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4);
+        }
+        assert(policy::github_slug(path@));
+        assert(policy::github_slug(name@));
+        assert(dot@ =~= seq![46u8]);
+        assert(dotdot@ =~= seq![46u8,46u8]);
+        assert(!policy::github_slug_byte(outside@[0]));
+    }
+    expect(policy::github_repository(host,&path,&name));
+    expect(policy::github_repository(ssh,&name,&path));
+    expect(!policy::github_repository(host,&[],&name));
+    expect(!policy::github_repository(host,&dot,&name));
+    expect(!policy::github_repository(host,&name,&dotdot));
+    path[3] = 47;
+    assert(!policy::github_slug_byte(path@[3]));
+    expect(!policy::github_repository(host,&path,&name));
+    expect(!policy::github_repository(host,&name,&outside));
+    proof {
+        reveal_strlit("github.com"); reveal_strlit("ssh.github.com");
+    }
+    expect(!policy::github_repository(&[],&name,&name));
+}
+
 }

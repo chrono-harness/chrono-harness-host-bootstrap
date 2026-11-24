@@ -37,6 +37,71 @@ pub use original::operation_record_matches;
 
 verus! {
 
+pub open spec fn github_slug_byte(b: u8) -> bool {
+    48 <= b <= 57 || 65 <= b <= 90 || 97 <= b <= 122 || b == 95 || b == 46 || b == 45
+}
+
+pub open spec fn github_slug(value: Seq<u8>) -> bool {
+    value.len() > 0 && value != seq![46u8] && value != seq![46u8, 46u8]
+        && forall|i:int| 0 <= i < value.len() ==> github_slug_byte(value[i])
+}
+
+fn valid_github_slug(value: &[u8]) -> (valid: bool)
+    ensures valid == github_slug(value@),
+{
+    if value.len() == 0 || (value.len() == 1 && value[0] == 46)
+        || (value.len() == 2 && value[0] == 46 && value[1] == 46) {
+        assert(value.len() == 0 || value@ =~= seq![46u8] || value@ =~= seq![46u8, 46u8]);
+        return false;
+    }
+    let mut i = 0;
+    while i < value.len()
+        invariant 0 <= i <= value.len(), forall|j:int| 0 <= j < i ==> github_slug_byte(value@[j]),
+        decreases value.len() - i,
+    {
+        let b = value[i];
+        if !((48 <= b && b <= 57) || (65 <= b && b <= 90) || (97 <= b && b <= 122)
+            || b == 95 || b == 46 || b == 45) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn ascii_host_matches(host: Seq<u8>, lower: Seq<u8>) -> bool {
+    host.len() == lower.len() && forall|i:int| 0 <= i < host.len() ==>
+        (host[i] == lower[i] || (65 <= host[i] <= 90 && host[i] as int + 32 == lower[i] as int))
+}
+
+fn matches_host(host: &[u8], lower: &[u8]) -> (same: bool)
+    ensures same == ascii_host_matches(host@, lower@),
+{
+    if host.len() != lower.len() { return false; }
+    let mut i = 0;
+    while i < host.len()
+        invariant 0 <= i <= host.len() == lower.len(),
+            forall|j:int| 0 <= j < i ==> (host@[j] == lower@[j] ||
+                (65 <= host@[j] <= 90 && host@[j] as int + 32 == lower@[j] as int)),
+        decreases host.len() - i,
+    {
+        let h = host[i];
+        if h != lower[i] && !(65 <= h && h <= 90 && h + 32 == lower[i]) { return false; }
+        i += 1;
+    }
+    true
+}
+
+/// Git's decoded authority, owner and repository are the inputs to the template admission.
+pub fn github_repository(host: &[u8], owner: &[u8], name: &[u8]) -> (accepted: bool)
+    ensures accepted == ((ascii_host_matches(host@, vstd::utf8::encode_utf8("github.com"@))
+        || ascii_host_matches(host@, vstd::utf8::encode_utf8("ssh.github.com"@)))
+        && github_slug(owner@) && github_slug(name@)),
+{
+    (matches_host(host, "github.com".as_bytes()) || matches_host(host, "ssh.github.com".as_bytes()))
+        && valid_github_slug(owner) && valid_github_slug(name)
+}
+
+
+
 pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
     ensures valid <==> (expected@.len() == 64
         && (forall|i: int| 0 <= i < expected@.len() ==> hash_byte(expected@[i]))
