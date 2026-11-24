@@ -32,4 +32,13 @@ bootstrap 独立构建。两个 Cargo 项目从本仓和 crates.io 解析源码�
 
 需要在全部编译调用结束后收取证明结果的宿主，为每个登记操作保留本次的独立报告和输出库，并运行 `chrono-host-bootstrap check-compiler-proof <Verus 版本> <commit> <原 stdout JSON> <输出库> <声明源>...`。程序要求库是非空普通文件，通过 runner 的 `proof-rows` 核对上报的版本、commit 和整根结果，再给 `dependency-matches` 核对目标、路径、字节数和 SHA-256。成功时返回原报告字节；缺原件或有一项不合格时报 `E_VERUS_COVERAGE`。宿主从该次专属输出目录分别收取每个必需操作。
 
+需要把证明报告归到具体操作时，在仓库根目录创建本次专属的临时目录，依次运行：
+
+```sh
+chrono-host-bootstrap run-compiler-proof "$scratch" "$operation" "$verus" "$root"
+chrono-host-bootstrap collect-compiler-proof "$scratch" "$operation" "$verus" "$version" "$commit" "$root" "${additional_sources[@]}"
+```
+
+第一条命令使用宿主指定的 Verus，创建独占的操作目录并保存其进程原件、输出库和 dep-info 摘要。第二条命令按登记的操作、根、可执行文件、原始命令行与本轮原件逐项收取，成功时输出原报告字节；缺少或错配时返回 `E_VERUS_COVERAGE`。宿主负责该临时目录的写入隔离与回收，以及 Verus 的选择、校验和安装。判断依赖进程、编译器、文件系统与摘要算法的实际行为。
+
 原生 Rust 检查通过已安装 runner 的 `compiler-output-v1 dependency-header` 读取 rustc 当时写下的目标主名。复用 Cargo 缓存时，目录别名和包含 `..` 的路径须实际解析到本次选中库的同一个普通 dep-info 文件；另一个目录中的硬链接和指向该文件的符号链接会被拒绝。

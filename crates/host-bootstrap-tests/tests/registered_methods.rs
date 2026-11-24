@@ -177,3 +177,100 @@ fn required_proof_collects_the_original_report_library_and_sources() {
     fs::remove_file(&report).unwrap();
     assert!(check_owner_proof(&contract, &report, &output, &sources, |_| panic!()).is_err());
 }
+
+#[test]
+fn collect_binds_the_requested_operation_to_the_observed_streams_and_artifacts() {
+    use chrono_host_bootstrap::{compiler::OutputContract, files::sha256, owner_proof::Proof};
+    use serde_json::{Value, json};
+    use std::{fs, path::Path};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let verifier = root.join("verifier");
+    fs::write(&verifier, b"mock compiler").unwrap();
+    let scratch = root.join("scratch");
+    fs::create_dir(&scratch).unwrap();
+    let source = tempfile::Builder::new()
+        .prefix("proof_test_")
+        .suffix(".rs")
+        .tempfile_in(".")
+        .unwrap();
+    let source_name = source
+        .path()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let sources = vec![source_name.clone()];
+    let contract = OutputContract {
+        version: "v".into(),
+        commit: "c".into(),
+    };
+    let collect = |name: &str| {
+        Proof::new(
+            &root,
+            &scratch,
+            name,
+            verifier.to_str().unwrap(),
+            &source_name,
+        )
+        .unwrap()
+        .collect(&contract, &sources, |q| {
+            Ok(if q["operation"] == "proof-rows" {
+                json!([true])
+            } else {
+                json!(true)
+            })
+        })
+    };
+    let publish = |name: &str, raw: &str| {
+        let dir = scratch.join(name);
+        fs::create_dir(&dir).unwrap();
+        let lib = dir.join("proof.rlib");
+        let dep = dir.join("proof.rlib.d");
+        let binary = b"independent library";
+        let manifest = b"independent dependencies";
+        fs::write(&lib, binary).unwrap();
+        fs::write(&dep, manifest).unwrap();
+        let path = |s: &str| dir.join(s).strip_prefix(&root).unwrap().to_path_buf();
+        let stream =
+            |p: &Path, data: &[u8]| json!({"path":p,"sha256":sha256(data),"size":data.len()});
+        fs::write(dir.join("0.stdout"), raw).unwrap();
+        fs::write(dir.join("0.stderr"), b"").unwrap();
+        let proc = json!({"operation":name,"tool":"verus","argv":[verifier,"--crate-type=lib","--no-cheating","--no-external-by-default","--num-threads","2","--output-json","--compile",format!("--emit=link={},dep-info={}",lib.display(),dep.display()),source_name,"-o",lib,"-Zchecksum-hash-algorithm=sha256"],"cwd":root,"executable_sha256":sha256(b"mock compiler"),"pid":123,"exit_code":0,"stdout":stream(&path("0.stdout"),raw.as_bytes()),"stderr":stream(&path("0.stderr"),b""),"duration_seconds":1.0});
+        let receipt = json!({"process":proc,"library":[sha256(binary),binary.len()],"dependencies":[sha256(manifest),manifest.len()]});
+        fs::write(
+            dir.join("receipt.json"),
+            serde_json::to_vec(&receipt).unwrap(),
+        )
+        .unwrap();
+    };
+    let a = "{\"verified\":1}\n";
+    let b = "{\"verified\":3}\n";
+    publish("product", a);
+    publish("tests", b);
+    assert_eq!(collect("product").unwrap(), a);
+    assert_eq!(collect("tests").unwrap(), b);
+    assert!(collect("missing").is_err());
+    let prod = scratch.join("product");
+    let obs = scratch.join("tests");
+    for (field, wrong) in [
+        ("0.stdout", b.as_bytes()),
+        ("proof.rlib.d", b"changed"),
+        ("proof.rlib", b"other library"),
+    ] {
+        let p = prod.join(field);
+        let old = fs::read(&p).unwrap();
+        fs::write(&p, wrong).unwrap();
+        assert!(collect("product").is_err(), "{field}");
+        fs::write(&p, old).unwrap();
+    }
+    let receipt = prod.join("receipt.json");
+    let old = fs::read(&receipt).unwrap();
+    fs::copy(obs.join("receipt.json"), &receipt).unwrap();
+    assert!(collect("product").is_err());
+    let mut mutated: Value = serde_json::from_slice(&old).unwrap();
+    mutated["process"]["argv"][9] = json!("different.rs");
+    fs::write(&receipt, serde_json::to_vec(&mutated).unwrap()).unwrap();
+    assert!(collect("product").is_err());
+}

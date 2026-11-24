@@ -93,6 +93,55 @@ fn run() -> Result<(), BuildFailure> {
             println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        [command, directory, operation, verifier, source] if command == "run-compiler-proof" => {
+            let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
+            chrono_host_bootstrap::owner_proof::Proof::new(
+                &root,
+                Path::new(directory),
+                operation,
+                verifier,
+                source,
+            )
+            .and_then(|proof| proof.run(&environment))
+            .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))
+        }
+        [
+            command,
+            directory,
+            operation,
+            verifier,
+            version,
+            commit,
+            sources @ ..,
+        ] if command == "collect-compiler-proof" => {
+            let source = sources
+                .first()
+                .ok_or_else(|| BuildFailure::from("E_VERUS_COVERAGE: missing proof root"))?;
+            let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
+            let contract = chrono_host_bootstrap::compiler::OutputContract {
+                version: version.clone(),
+                commit: commit.clone(),
+            };
+            let original = chrono_host_bootstrap::owner_proof::Proof::new(
+                &root,
+                Path::new(directory),
+                operation,
+                verifier,
+                source,
+            )
+            .and_then(|proof| {
+                proof.collect(
+                    &contract,
+                    sources,
+                    chrono_host_bootstrap::compiler::compiler,
+                )
+            })
+            .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))?;
+            std::io::stdout()
+                .lock()
+                .write_all(original.as_bytes())
+                .map_err(|e| BuildFailure::from(e.to_string()))
+        }
         [command, version, commit, report, output, sources @ ..]
             if command == "check-compiler-proof" =>
         {
