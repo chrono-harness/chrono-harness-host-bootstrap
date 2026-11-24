@@ -242,11 +242,22 @@ pub fn check_owner_sources(
     let raw = bounded(&dependency)?;
     let matched = match kind {
         "native" => {
-            let result = query(json!({"operation":"dependency-paths", "dependency":raw,
-                "stem":output.as_os_str().as_encoded_bytes()}))?;
-            let paths: Option<Vec<Vec<u8>>> =
+            use std::os::unix::ffi::OsStringExt;
+            let result = query(json!({"operation":"dependency-header", "dependency":raw}))?;
+            let header: Option<(Vec<u8>, Vec<Vec<u8>>)> =
                 serde_json::from_value(result).map_err(|e| e.to_string())?;
-            let paths = paths.ok_or("invalid native compiler dependency header")?;
+            let (stem, paths) = header.ok_or("invalid native compiler dependency header")?;
+            let mut declared = std::ffi::OsString::from_vec(stem);
+            declared.push(".d");
+            let declared = Path::new(&declared);
+            if declared != dependency {
+                let original = fs::symlink_metadata(declared).map_err(|e| e.to_string())?;
+                let selected = fs::canonicalize(&dependency).map_err(|e| e.to_string())?;
+                let actual = fs::canonicalize(declared).map_err(|e| e.to_string())?;
+                if !original.file_type().is_file() || actual != selected {
+                    return Err("native compiler header names another dependency file".into());
+                }
+            }
             cargo::required_compiler_paths(&paths, sources)
         }
         "proof" => {
