@@ -26,10 +26,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.bootstrap-bindings.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings.rlib.d",
+            "--emit=link={operation_state}/verify.bootstrap-bindings.rlib,dep-info={operation_state}/verify.bootstrap-bindings.rlib.d",
             "crates/host-bootstrap/src/verified_bindings.rs",
             "-o",
-            ".chrono-harness/state/verify.bootstrap-bindings.rlib",
+            "{operation_state}/verify.bootstrap-bindings.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -59,10 +59,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib.d",
+            "--emit=link={operation_state}/verify.bootstrap-bindings-tests.rlib,dep-info={operation_state}/verify.bootstrap-bindings-tests.rlib.d",
             "crates/host-bootstrap-tests/tests/verified_bindings.rs",
             "-o",
-            ".chrono-harness/state/verify.bootstrap-bindings-tests.rlib",
+            "{operation_state}/verify.bootstrap-bindings-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -89,10 +89,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib.d",
+            "--emit=link={operation_state}/verify.bootstrap-cargo-tests.rlib,dep-info={operation_state}/verify.bootstrap-cargo-tests.rlib.d",
             "crates/host-bootstrap-tests/tests/verified_cargo.rs",
             "-o",
-            ".chrono-harness/state/verify.bootstrap-cargo-tests.rlib",
+            "{operation_state}/verify.bootstrap-cargo-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {

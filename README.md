@@ -53,3 +53,13 @@ chrono-host-bootstrap collect-cargo-proof "$scratch" verify-packages "$cargo_ver
 从宿主根目录调用。传入已存在的本次临时目录、Verus 分发中的 `cargo-verus` 以及 workspace 根 manifest。执行器用 Cargo metadata 获取所选包的目标，用该 workspace 的锁文件在新 target 目录串行编译。宿主为每个必需的根收取一次结果，需要绑定的其他源可接在根路径后。收取成功返回该根的原始 Verus JSON。调用、根、原始流、库、验证元数据或编译器记录的输入与本轮不符时，命令以退出码 1 报告 `E_VERUS_COVERAGE`。
 
 `.d` 给出 rustc 记录的源和二进制依赖及其校验值。`.rmeta`、`.vir` 和 `.rlib` 均核对产生时的内容。库目标的 `.rlib` 在本步骤是构建产物；最终程序是否链接它需要在最终链接步骤查验。原始 stdout、stderr、收据与 Cargo target 均在调用者的临时目录中，收取结束后随该次工作清理。
+
+## 本地检查的保留窗口
+
+本仓的本地完整检查在 `.chrono-harness/state/collection/check.json` 发布报告。需要保留的结果应在 24 小时内将报告及其引用的原件转存至检出外，并从接收位置读回。各 Verus 操作的编译库和依赖文件由项目判官读取，成功后由当前操作释放。
+
+在长期开发检出上，按实际仓库和 mise 路径在用户 crontab 安装下列条目。每小时调用同一个模板任务；到期报告在读取和交付义务结束后释放，后续维护回收已无引用的原件。机器在线并启用该定时任务时，维护会在没有后续业务命令的情况下运行。
+
+```cron
+0 * * * * cd '/absolute/path/to/repository' && '/absolute/path/to/mise' run harness-maintain-checks >/dev/null
+```
