@@ -7,15 +7,15 @@ use vstd::prelude::*;
 verus! {
 
 /// Skip unrelated names and protected Git inputs before opening a candidate.
-pub fn candidate(generated: bool, tracked: bool) -> (allow: bool)
-    ensures allow == (generated && !tracked),
-{ generated && !tracked }
+pub fn candidate(generated: bool, git_protected: bool) -> (allow: bool)
+    ensures allow == (generated && !git_protected),
+{ generated && !git_protected }
 
 /// None is used only by the successful command that owns the directory.
 pub fn time_ready(keep: Option<u64>, elapsed: Option<u64>) -> (ready: bool)
     ensures ready == match keep {
         None => true,
-        Some(seconds) => seconds > 0 && elapsed matches Some(age) && age >= seconds,
+        Some(seconds) => seconds > 0 && match elapsed { Some(age) => age >= seconds, None => false },
     },
 {
     match (keep, elapsed) {
