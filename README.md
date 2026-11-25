@@ -58,14 +58,10 @@ chrono-host-bootstrap collect-cargo-proof "$scratch" verify-packages "$cargo_ver
 
 本仓的本地完整检查在 `.chrono-harness/state/collection/check.json` 发布报告。需要保留的结果应在 24 小时内将报告及其引用的原件转存至检出外，并从接收位置读回。各 Verus 操作的编译库和依赖文件由项目判官读取，成功后由当前操作释放。
 
-在长期开发检出上，按实际仓库和 mise 路径在用户 crontab 安装下列条目。每小时调用同一个模板任务；到期报告在读取和交付义务结束后释放，后续维护回收已无引用的原件。机器在线并启用该定时任务时，维护会在没有后续业务命令的情况下运行。
-
-```cron
-0 * * * * cd '/absolute/path/to/repository' && '/absolute/path/to/mise' run harness-maintain-checks >/dev/null
-```
+运行 `mise run harness-maintain-checks` 可执行一轮本仓的检查产物维护。已到期的成功报告在读取和交付义务结束后释放，后续维护轮次回收失去引用的原件。没有业务事件或显式维护时，到期的文件会继续占用磁盘。
 
 ## 原生检查的临时编译目录
 
 从宿主仓库根运行 `chrono-host-bootstrap native-scratch run PROGRAM [ARG ...]`。程序从环境变量 `CHRONO_NATIVE_SCRATCH` 读取专属的绝对目录，路径位于 `target/native-checks/`。成功退出时释放本次目录；失败时保留到宿主设定的窗口。标准错误在启动子程序前给出目录，需长期留存的数据请在窗口内转存。外部自选的 Cargo target 仍由调用方管理。
 
-将 `chrono-host-bootstrap native-scratch maintain 86400` 加入宿主已安装的定时维护，可在最后写入或失败满 24 小时且最后一个持锁进程结束后清理。参数是正整数，以秒为单位。工具核对 Git 索引和 HEAD，保留跟踪路径，以及身份不符的目录。维护至少每小时成功运行一次时，符合条件的目录将在下一轮被处理。
+将 `chrono-host-bootstrap native-scratch maintain 86400` 登记为宿主的维护操作，可在最后写入或失败满 24 小时且最后一个持锁进程结束后清理。参数是正整数，以秒为单位。工具核对 Git 索引和 HEAD，保留跟踪路径，以及身份不符的目录。下一次成功处理该目录的维护轮次会回收符合条件的材料。
