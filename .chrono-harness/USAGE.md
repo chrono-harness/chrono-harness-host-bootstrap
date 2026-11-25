@@ -15,3 +15,5 @@
 ## 本仓验证
 
 产品位于 [`crates/host-bootstrap`](../crates/host-bootstrap)。原生测试位于 [`crates/host-bootstrap-tests`](../crates/host-bootstrap-tests)。在仓库根目录运行 `mise exec -- ./check.sh` 按 Git 变更选择工具绑定和 Cargo 模块的生产证明、独立边界预期和候选 bootstrap 自己的编译器启动与收集检查。GitHub 汇总读取固定候选的单元原件。
+
+原生检查入口用 `chrono-host-bootstrap native-scratch run PROGRAM [ARG ...]` 启动编译或测试。子程序从 `CHRONO_NATIVE_SCRATCH` 取得本次专用目录。成功且读者退出后即可回收；失败或中断的目录保留 86400 秒，仍持租约时继续保全。需要留存的诊断应在窗口内转存并核对摘要。 本仓现有的 `mise run harness-maintain-checks` 同时执行报告和编译目录的维护。
