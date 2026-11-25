@@ -1,4 +1,5 @@
 //! Calls to the installed runner's public JSON commands.
+use crate::verified_bindings::{CompilerError, compiler_output};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use std::{
@@ -24,18 +25,24 @@ pub fn query<T: DeserializeOwned>(operation: &str, input: &impl Serialize) -> Re
         (output, writer.join())
     });
     let output = output.map_err(|e| e.to_string())?;
-    if !output.status.success() {
-        let message = String::from_utf8(output.stderr).map_err(|e| e.to_string())?;
-        return Err(if message.is_empty() {
-            format!("chrono-harness {operation}: {}", output.status)
-        } else {
-            message.trim_end_matches('\n').to_owned()
-        });
-    }
-    written
-        .map_err(|_| "runner stdin writer panicked")?
-        .map_err(|e| e.to_string())?;
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+    let written = written
+        .map_err(|_| String::from("runner stdin writer panicked"))
+        .and_then(|result| result.map_err(|error| error.to_string()));
+    let stdout = compiler_output(
+        output.status.success(),
+        output.stdout,
+        output.stderr,
+        written,
+    )
+    .map_err(|error| match error {
+        CompilerError::Status => format!("chrono-harness {operation}: {}", output.status),
+        CompilerError::Diagnostic(bytes) => match String::from_utf8(bytes) {
+            Ok(message) => message.trim_end_matches('\n').to_owned(),
+            Err(error) => error.to_string(),
+        },
+        CompilerError::Write(error) => error,
+    })?;
+    serde_json::from_slice(&stdout).map_err(|error| error.to_string())
 }
 
 pub fn compiler<T: DeserializeOwned>(input: Value) -> Result<T, String> {

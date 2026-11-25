@@ -24,6 +24,23 @@ mod original_tests;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_exit_and_writer_choose_the_original_stream() {
+    use policy::{CompilerError, compiler_output};
+    let normal = compiler_output::<u8>(true, vec![41u8], vec![98u8], Ok(()));
+    let withheld = compiler_output(true, vec![41u8], vec![98u8], Err(17u8));
+    let status = compiler_output(false, vec![41u8], vec![], Err(17u8));
+    let diagnostic = compiler_output(false, vec![41u8], vec![255u8], Err(17u8));
+    let original = match normal { Ok(bytes) => bytes.len() == 1 && bytes[0] == 41, _ => false };
+    let write_first = matches!(withheld, Err(CompilerError::Write(17)));
+    let code_first = matches!(status, Err(CompilerError::Status));
+    let bytes_first = match diagnostic {
+        Err(CompilerError::Diagnostic(bytes)) => bytes.len() == 1 && bytes[0] == 255,
+        _ => false,
+    };
+    expect(original && write_first && code_first && bytes_first);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn native_directory_decisions_require_time_identity_and_exclusive_use() {
     use policy::native_policy::*;
     expect(candidate(true,false));
