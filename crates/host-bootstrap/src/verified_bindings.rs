@@ -48,6 +48,29 @@ pub use original::operation_record_matches;
 
 verus! {
 
+/// The response bytes and the writer's error belong to the completed runner invocation.
+pub enum CompilerError<E> { Status, Diagnostic(Vec<u8>), Write(E) }
+
+pub fn compiler_output<E>(success: bool, stdout: Vec<u8>, stderr: Vec<u8>, written: Result<(), E>)
+    -> (result: Result<Vec<u8>, CompilerError<E>>)
+    ensures match result {
+        Ok(bytes) => success && written is Ok && bytes@ == stdout@,
+        Err(CompilerError::Status) => !success && stderr@.len() == 0,
+        Err(CompilerError::Diagnostic(bytes)) => !success && stderr@.len() > 0 && bytes@ == stderr@,
+        Err(CompilerError::Write(error)) => success && written == Err::<(),E>(error),
+    },
+{
+    if !success {
+        if stderr.is_empty() { Err(CompilerError::Status) }
+        else { Err(CompilerError::Diagnostic(stderr)) }
+    } else {
+        match written {
+            Err(error) => Err(CompilerError::Write(error)),
+            Ok(()) => Ok(stdout),
+        }
+    }
+}
+
 /// The initial shell can consume a complete finite table before any harness binary exists.
 pub fn ci_manager(available: bool, hosted: bool) -> (mode: &'static str)
     ensures mode@ == if available { "existing"@ } else if hosted { "platform"@ } else { "unavailable"@ },

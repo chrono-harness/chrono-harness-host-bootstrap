@@ -365,6 +365,18 @@
       ]
     },
     {
+      "path": "crates/host-bootstrap-tests/tests/compiler_query.rs",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/host-bootstrap-tests/tests/native_scratch.rs",
       "owner": "host-bootstrap-tests",
       "surface": "test",
