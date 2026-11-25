@@ -324,6 +324,23 @@ fn logged(root: &Path, operation: &str) -> Result<u8, String> {
 }
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if let [command, selection] = arguments.as_slice()
+        && command == "ci-install-table-v1"
+    {
+        let check_storage_and_links = match selection.to_str() {
+            Some("manager") => false,
+            Some("manager-storage-links") => true,
+            _ => {
+                eprintln!("expected manager or manager-storage-links");
+                return ExitCode::from(2);
+            }
+        };
+        print!(
+            "{}",
+            chrono_host_bootstrap::template::ci_install_table(check_storage_and_links)
+        );
+        return ExitCode::SUCCESS;
+    }
     if matches!(arguments.as_slice(), [arg] if arg == "prepare-template") {
         return match chrono_host_bootstrap::template::run() {
             Ok(message) => {

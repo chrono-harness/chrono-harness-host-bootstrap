@@ -24,6 +24,34 @@ mod original_tests;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn install_uses_an_available_manager_and_rejects_storage_in_checkout() {
+    let present = policy::ci_manager(true, false);
+    let hosted = policy::ci_manager(false, true);
+    let local = policy::ci_manager(false, false);
+    let bad = policy::ci_storage(true);
+    let good = policy::ci_storage(false);
+    assert(present@ == "existing"@ && hosted@ == "platform"@ && local@ == "unavailable"@);
+    assert(bad@ == "reject"@ && good@ == "accept"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn install_selects_exact_platforms_and_preserves_declared_link_behavior() {
+    proof {
+        reveal_strlit("Darwin/arm64"); reveal_strlit("Linux/x86_64"); reveal_strlit("other");
+        assert("Darwin/arm64"@[0] != "Linux/x86_64"@[0]);
+        assert("other"@.len() != "Darwin/arm64"@.len() && "other"@.len() != "Linux/x86_64"@.len());
+    }
+    let darwin = policy::ci_mise_asset("Darwin/arm64");
+    let linux = policy::ci_mise_asset("Linux/x86_64");
+    let other = policy::ci_mise_asset("other");
+    let keep = policy::ci_link(true, true);
+    let replace = policy::ci_link(true, false);
+    let create = policy::ci_link(false, false);
+    assert(darwin.unwrap()@ == "macos-arm64"@ && linux.unwrap()@ == "linux-x64"@ && other.is_none());
+    assert(keep@ == "keep"@ && create@ == "create"@ && replace@ == "replace"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn archive_reuse_requires_the_complete_declared_digest() {
     broadcast use vstd::array::group_array_axioms;
     let zeros = [48u8; 64];
