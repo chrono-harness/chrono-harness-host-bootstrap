@@ -1,4 +1,5 @@
 //! One lease covers the private compilation directory and the entire native process.
+use crate::verified_bindings::native_policy;
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File, OpenOptions};
@@ -76,26 +77,30 @@ fn tracked(root: &Path, git: &OsStr) -> io::Result<HashSet<OsString>> {
 
 fn dispose(path: &Path, protected: &HashSet<OsString>, age: Option<Duration>) -> io::Result<bool> {
     let name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
-    if !name.strip_prefix(PREFIX).is_some_and(|suffix| {
+    let generated = name.strip_prefix(PREFIX).is_some_and(|suffix| {
         suffix.len() == 16 && suffix.bytes().all(|c| c.is_ascii_alphanumeric())
-    }) || protected.contains(OsStr::new(name))
+    });
+    if !native_policy::candidate(generated, protected.contains(OsStr::new(name)))
         || !path.symlink_metadata()?.is_dir()
     {
         return Ok(false);
     }
     let lease = physical_directory(path)?;
-    match lease.try_lock() {
-        Err(std::fs::TryLockError::WouldBlock) => return Ok(false),
+    let exclusively_held = match lease.try_lock() {
+        Err(std::fs::TryLockError::WouldBlock) => false,
         Err(std::fs::TryLockError::Error(error)) => return Err(error),
-        Ok(()) => {}
+        Ok(()) => true,
+    };
+    if !exclusively_held {
+        return Ok(false);
     }
     let stat = lease.metadata()?;
-    if age.is_some_and(|keep| {
-        stat.modified()
-            .ok()
-            .and_then(|t| SystemTime::now().duration_since(t).ok())
-            .is_none_or(|elapsed| elapsed < keep)
-    }) {
+    let keep = age.map(|d| d.as_secs());
+    let elapsed = keep
+        .and_then(|_| stat.modified().ok())
+        .and_then(|t| SystemTime::now().duration_since(t).ok())
+        .map(|d| d.as_secs());
+    if !native_policy::time_ready(keep, elapsed) {
         return Ok(false);
     }
     let marker = path.join(OWNER);
@@ -103,15 +108,27 @@ fn dispose(path: &Path, protected: &HashSet<OsString>, age: Option<Duration>) ->
         Ok(meta) if meta.is_file() && meta.len() <= 64 => {
             let content = fs::read(&marker)?;
             let signature = identity(&stat);
-            content == signature.as_bytes()
-                || (signature.as_bytes().starts_with(&content)
-                    && fs::read_dir(path)?.collect::<io::Result<Vec<_>>>()?.len() == 1)
+            let complete = content == signature.as_bytes();
+            let prefix_only = !complete
+                && signature.as_bytes().starts_with(&content)
+                && fs::read_dir(path)?
+                    .take(2)
+                    .collect::<io::Result<Vec<_>>>()?
+                    .len()
+                    == 1;
+            native_policy::marker_owned(complete, prefix_only, false)
         }
-        Err(e) if e.kind() == ErrorKind::NotFound => fs::read_dir(path)?.next().is_none(),
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            native_policy::marker_owned(false, false, fs::read_dir(path)?.next().is_none())
+        }
         Ok(_) => false,
         Err(e) => return Err(e),
     };
-    if !owns || identity(&path.symlink_metadata()?) != identity(&stat) {
+    if !native_policy::removable(
+        exclusively_held,
+        owns,
+        identity(&path.symlink_metadata()?) == identity(&stat),
+    ) {
         return Ok(false);
     }
     // Remove the ownership marker last so an interrupted sweep can resume.
