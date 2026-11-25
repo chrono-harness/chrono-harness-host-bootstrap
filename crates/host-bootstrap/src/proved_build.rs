@@ -253,15 +253,13 @@ pub fn check_owner_sources(
     sources: &[String],
     query: impl Fn(serde_json::Value) -> Result<serde_json::Value, String>,
 ) -> Result<(), String> {
-    if sources.is_empty() {
-        return Err("no source files declared".into());
-    }
+    let mode = cargo::owner_source_mode(kind, sources.len()).ok_or("no source files declared")?;
     let mut dependency = output.as_os_str().to_os_string();
     dependency.push(".d");
     let dependency = PathBuf::from(dependency);
     let raw = bounded(&dependency)?;
-    let matched = match kind {
-        "native" => {
+    let matched = match mode {
+        cargo::OwnerSourceMode::Native => {
             use std::os::unix::ffi::OsStringExt;
             let result = query(json!({"operation":"dependency-header", "dependency":raw}))?;
             let header: Option<(Vec<u8>, Vec<Vec<u8>>)> =
@@ -270,17 +268,25 @@ pub fn check_owner_sources(
             let mut declared = std::ffi::OsString::from_vec(stem);
             declared.push(".d");
             let declared = Path::new(&declared);
-            if declared != dependency {
+            let lexical = declared.cmp(dependency.as_path());
+            if matches!(
+                cargo::native_header(lexical, None),
+                cargo::NativeHeader::InspectAlias
+            ) {
                 let original = fs::symlink_metadata(declared).map_err(|e| e.to_string())?;
                 let selected = fs::canonicalize(&dependency).map_err(|e| e.to_string())?;
                 let actual = fs::canonicalize(declared).map_err(|e| e.to_string())?;
-                if !original.file_type().is_file() || actual != selected {
+                let observation = (original.file_type().is_file(), actual.cmp(&selected));
+                if matches!(
+                    cargo::native_header(lexical, Some(observation)),
+                    cargo::NativeHeader::Reject
+                ) {
                     return Err("native compiler header names another dependency file".into());
                 }
             }
             cargo::required_compiler_paths(&paths, sources)
         }
-        "proof" => {
+        cargo::OwnerSourceMode::Proof => {
             let bindings = sources
                 .iter()
                 .map(|name| {
@@ -292,7 +298,9 @@ pub fn check_owner_sources(
                 "targets":[dependency.as_os_str().as_encoded_bytes(),output.as_os_str().as_encoded_bytes()],
                 "sources":bindings}))?).map_err(|e| e.to_string())?
         }
-        _ => return Err(format!("unknown compiler output kind {kind:?}")),
+        cargo::OwnerSourceMode::Unknown => {
+            return Err(format!("unknown compiler output kind {kind:?}"));
+        }
     };
     if matched {
         Ok(())

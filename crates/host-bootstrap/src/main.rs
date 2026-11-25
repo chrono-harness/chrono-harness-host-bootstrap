@@ -88,6 +88,17 @@ fn run() -> Result<(), BuildFailure> {
         .collect::<Result<_, _>>()?;
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
+    if let Some((kind, output, sources)) =
+        chrono_host_bootstrap::verified_cargo::owner_source_arguments(&arguments)
+    {
+        return proved_build::check_owner_sources(
+            kind,
+            Path::new(output),
+            sources,
+            chrono_host_bootstrap::compiler::compiler,
+        )
+        .map_err(|error| BuildFailure::from(format!("E_VERUS_COVERAGE: {error}")));
+    }
     match arguments.as_slice() {
         [command] if command == "--version" => {
             println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
@@ -203,15 +214,6 @@ fn run() -> Result<(), BuildFailure> {
                 .lock()
                 .write_all(original.as_bytes())
                 .map_err(|error| BuildFailure::from(error.to_string()))
-        }
-        [command, kind, output, sources @ ..] if command == "check-compiler-sources" => {
-            proved_build::check_owner_sources(
-                kind,
-                Path::new(output),
-                sources,
-                chrono_host_bootstrap::compiler::compiler,
-            )
-            .map_err(|error| BuildFailure::from(format!("E_VERUS_COVERAGE: {error}")))
         }
         [command, host, config] if command == "compile" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;

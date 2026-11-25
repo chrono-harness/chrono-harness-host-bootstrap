@@ -1063,6 +1063,14 @@
         "role": "program",
         "roots": [
           {
+            "path": "crates/host-bootstrap/src/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings"
+          },
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          },
+          {
             "path": "crates/host-bootstrap-tests/tests/verified_cargo.rs",
             "operation": "verify.bootstrap-cargo-tests"
           }
