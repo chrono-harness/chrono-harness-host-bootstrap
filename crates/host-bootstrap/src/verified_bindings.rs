@@ -7,6 +7,10 @@ use vstd::prelude::*;
 #[path = "native_policy.rs"]
 pub mod native_policy;
 
+#[cfg(verus_keep_ghost)]
+#[path = "verified_cargo.rs"]
+pub mod verified_cargo;
+
 #[path = "artifact_identity.rs"]
 pub mod artifact_identity;
 #[cfg(verus_keep_ghost)]
