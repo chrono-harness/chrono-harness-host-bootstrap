@@ -44,3 +44,7 @@ path = "tests/verified_cargo.rs"
 [[test]]
 name = "template"
 path = "tests/template.rs"
+
+[[test]]
+name = "native_scratch"
+path = "tests/native_scratch.rs"

@@ -365,6 +365,18 @@
       ]
     },
     {
+      "path": "crates/host-bootstrap-tests/tests/native_scratch.rs",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/host-bootstrap-tests/tests/proof_support/host-bootstrap/construction.rs",
       "owner": "host-bootstrap-tests",
       "surface": "test",
@@ -793,6 +805,18 @@
     },
     {
       "path": "crates/host-bootstrap/src/main.rs",
+      "owner": "host-bootstrap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/host-bootstrap/src/native_scratch.rs",
       "owner": "host-bootstrap",
       "surface": "product",
       "cost": "unmeasured",
