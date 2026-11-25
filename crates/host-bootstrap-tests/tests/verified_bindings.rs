@@ -24,6 +24,29 @@ mod original_tests;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn native_directory_decisions_require_time_identity_and_exclusive_use() {
+    use policy::native_policy::*;
+    expect(candidate(true,false));
+    expect(!candidate(true,true));
+    expect(!candidate(false,false));
+    expect(time_ready(None,None));
+    expect(!time_ready(Some(8),None));
+    expect(!time_ready(Some(0),Some(8)));
+    expect(!time_ready(Some(8),Some(7)));
+    expect(time_ready(Some(8),Some(8)));
+    expect(time_ready(Some(8),Some(9)));
+    expect(marker_owned(true,false,false));
+    expect(marker_owned(false,true,false));
+    expect(marker_owned(false,false,true));
+    expect(!marker_owned(false,false,false));
+    expect(removable(true,true,true));
+    expect(!removable(false,true,true));
+    expect(!removable(true,false,true));
+    expect(!removable(true,true,false));
+}
+
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn install_uses_an_available_manager_and_rejects_storage_in_checkout() {
     let present = policy::ci_manager(true, false);
     let hosted = policy::ci_manager(false, true);

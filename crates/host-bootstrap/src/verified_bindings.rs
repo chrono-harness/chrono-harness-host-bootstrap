@@ -4,6 +4,9 @@ use vstd::prelude::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[path = "native_policy.rs"]
+pub mod native_policy;
+
 #[path = "artifact_identity.rs"]
 pub mod artifact_identity;
 #[cfg(verus_keep_ghost)]
