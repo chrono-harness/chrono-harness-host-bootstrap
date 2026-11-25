@@ -63,3 +63,9 @@ chrono-host-bootstrap collect-cargo-proof "$scratch" verify-packages "$cargo_ver
 ```cron
 0 * * * * cd '/absolute/path/to/repository' && '/absolute/path/to/mise' run harness-maintain-checks >/dev/null
 ```
+
+## 原生检查的临时编译目录
+
+从宿主仓库根运行 `chrono-host-bootstrap native-scratch run PROGRAM [ARG ...]`。程序从环境变量 `CHRONO_NATIVE_SCRATCH` 读取专属的绝对目录，路径位于 `target/native-checks/`。成功退出时释放本次目录；失败时保留到宿主设定的窗口。标准错误在启动子程序前给出目录，需长期留存的数据请在窗口内转存。外部自选的 Cargo target 仍由调用方管理。
+
+将 `chrono-host-bootstrap native-scratch maintain 86400` 加入宿主已安装的定时维护，可在最后写入或失败满 24 小时且最后一个持锁进程结束后清理。参数是正整数，以秒为单位。工具核对 Git 索引和 HEAD，保留跟踪路径，以及身份不符的目录。维护至少每小时成功运行一次时，符合条件的目录将在下一轮被处理。

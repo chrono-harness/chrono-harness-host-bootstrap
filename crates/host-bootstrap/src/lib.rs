@@ -17,6 +17,8 @@ pub mod execution;
 #[cfg(not(verus_keep_ghost))]
 pub mod files;
 pub mod lifecycle;
+#[cfg(not(verus_keep_ghost))]
+pub mod native_scratch;
 pub mod original;
 pub mod owner;
 #[cfg(not(verus_keep_ghost))]

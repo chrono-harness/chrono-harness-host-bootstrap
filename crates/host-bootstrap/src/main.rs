@@ -324,6 +324,39 @@ fn logged(root: &Path, operation: &str) -> Result<u8, String> {
 }
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if let [command, rest @ ..] = arguments.as_slice()
+        && command == "native-scratch"
+    {
+        let result = (|| -> std::io::Result<u8> {
+            let root = std::env::current_dir()?.canonicalize()?;
+            let git = std::ffi::OsStr::new("git");
+            match rest {
+                [action, program, args @ ..] if action == "run" => {
+                    chrono_host_bootstrap::native_scratch::run(&root, program, args, git)
+                }
+                [action, seconds] if action == "maintain" => {
+                    let seconds = seconds
+                        .to_str()
+                        .and_then(|v| v.parse().ok())
+                        .ok_or_else(|| std::io::Error::other("invalid retention seconds"))?;
+                    let removed =
+                        chrono_host_bootstrap::native_scratch::maintain(&root, seconds, git)?;
+                    println!("native check directories removed: {removed}");
+                    Ok(0)
+                }
+                _ => Err(std::io::Error::other(
+                    "usage: native-scratch run PROGRAM [ARG ...] | maintain SECONDS",
+                )),
+            }
+        })();
+        return match result {
+            Ok(code) => code.into(),
+            Err(error) => {
+                eprintln!("native scratch: {error}");
+                2.into()
+            }
+        };
+    }
     if let [command, selection] = arguments.as_slice()
         && command == "ci-install-table-v1"
     {
