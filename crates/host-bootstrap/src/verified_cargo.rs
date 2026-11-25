@@ -287,6 +287,54 @@ pub fn fingerprint(bytes: &[u8]) -> (valid: bool)
     true
 }
 
+/// The owner command receives the exact mode, output and remaining source arguments.
+pub fn owner_source_arguments<'a>(args: &'a [String]) -> (out: Option<(&'a str, &'a str, &'a [String])>)
+    ensures out.is_some() == (args.len() >= 3 && args@[0]@ == "check-compiler-sources"@),
+        match out {
+            Some((kind, output, sources)) => kind@ == args@[1]@ && output@ == args@[2]@
+                && sources@ == args@.skip(3),
+            None => true,
+        },
+{
+    if args.len() < 3 || !equal_text(args[0].as_str(), "check-compiler-sources") { return None; }
+    Some((args[1].as_str(), args[2].as_str(), slice_subrange(args, 3, args.len())))
+}
+
+pub enum OwnerSourceMode { Native, Proof, Unknown }
+
+/// Empty source declarations fail before opening the requested dep-info.
+pub fn owner_source_mode(kind: &str, count: usize) -> (mode: Option<OwnerSourceMode>)
+    ensures mode.is_none() == (count == 0),
+        match mode {
+            Some(OwnerSourceMode::Native) => kind@ == "native"@,
+            Some(OwnerSourceMode::Proof) => kind@ == "proof"@,
+            Some(OwnerSourceMode::Unknown) => kind@ != "native"@ && kind@ != "proof"@,
+            None => true,
+        },
+{
+    if count == 0 { None }
+    else if equal_text(kind, "native") { Some(OwnerSourceMode::Native) }
+    else if equal_text(kind, "proof") { Some(OwnerSourceMode::Proof) }
+    else { Some(OwnerSourceMode::Unknown) }
+}
+
+/// Path ordering is observed by std::path. Metadata and canonicalization come from the filesystem.
+pub enum NativeHeader { InspectAlias, Accept, Reject }
+pub fn native_header(lexical: std::cmp::Ordering, alias: Option<(bool, std::cmp::Ordering)>)
+    -> (action: NativeHeader)
+    ensures (action is Accept) == (lexical == std::cmp::Ordering::Equal
+                || alias == Some((true, std::cmp::Ordering::Equal))),
+        (action is InspectAlias) == (lexical != std::cmp::Ordering::Equal && alias.is_none()),
+        (action is Reject) == (lexical != std::cmp::Ordering::Equal && alias.is_some()
+                && alias != Some((true, std::cmp::Ordering::Equal))),
+{
+    match (lexical, alias) {
+        (std::cmp::Ordering::Equal, _) | (_, Some((true, std::cmp::Ordering::Equal))) => NativeHeader::Accept,
+        (_, None) => NativeHeader::InspectAlias,
+        _ => NativeHeader::Reject,
+    }
+}
+
 pub open spec fn compiler_has_path(paths: Seq<Vec<u8>>, name: Seq<u8>) -> bool {
     exists|i: int| 0 <= i < paths.len() && (#[trigger] paths[i])@ == name
 }

@@ -19,6 +19,34 @@ use expectation::expect;
 
 verus! {
 
+#[cfg(verus_keep_ghost)]
+fn source_command_preserves_the_callers_full_list(command: String, mode: String, output: String, source: String)
+    requires command@ == "check-compiler-sources"@,
+{
+    let args = [command, mode, output, source];
+    let (mode_arg, output_arg, sources) = cargo::owner_source_arguments(&args).unwrap();
+    assert(mode_arg@ == args@[1]@ && output_arg@ == args@[2]@ && sources@ =~= seq![args@[3]]);
+    expect(cargo::owner_source_arguments(vstd::slice::slice_subrange(&args, 0, 2)).is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_sources_require_a_mode_and_a_matching_native_original() {
+    use cargo::{OwnerSourceMode, NativeHeader};
+    use std::cmp::Ordering::{Less, Equal, Greater};
+    proof { reveal_strlit("native"); reveal_strlit("proof"); reveal_strlit("other");
+        assert("native"@.len() != "proof"@.len() && "other"@.len() != "native"@.len());
+        assert("proof"@[0] != "other"@[0]); }
+    expect(cargo::owner_source_mode("native", 0).is_none());
+    expect(matches!(cargo::owner_source_mode("native", 1), Some(OwnerSourceMode::Native)));
+    expect(matches!(cargo::owner_source_mode("proof", 1), Some(OwnerSourceMode::Proof)));
+    expect(matches!(cargo::owner_source_mode("other", 1), Some(OwnerSourceMode::Unknown)));
+    expect(matches!(cargo::native_header(Equal, None), NativeHeader::Accept));
+    expect(matches!(cargo::native_header(Less, None), NativeHeader::InspectAlias));
+    expect(matches!(cargo::native_header(Greater, Some((true, Equal))), NativeHeader::Accept));
+    expect(matches!(cargo::native_header(Greater, Some((false, Equal))), NativeHeader::Reject));
+    expect(matches!(cargo::native_header(Less, Some((true, Greater))), NativeHeader::Reject));
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn required_operation_has_one_successful_report_and_a_nonempty_regular_library() {
     expect(cargo::one_successful_proof(&[Some(true)]));
