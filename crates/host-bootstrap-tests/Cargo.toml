@@ -35,6 +35,7 @@ name = "report_query"
 path = "tests/report_query.rs"
 
 [dev-dependencies]
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
 vstd = "=0.0.0-2026-04-20-1748"
 
 [[test]]
@@ -56,3 +57,7 @@ path = "tests/native_scratch.rs"
 [[example]]
 name = "release_observation"
 path = "tests/verified_bindings.rs"
+
+[[test]]
+name = "deployed_host"
+path = "../../.chrono-harness/ci/host_adapters.rs"

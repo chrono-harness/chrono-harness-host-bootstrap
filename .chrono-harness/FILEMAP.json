@@ -54,6 +54,27 @@
       }
     },
     {
+      "path": ".chrono-harness/ci/host_adapters.rs",
+      "owner": "host",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
+    },
+    {
       "path": ".chrono-harness/ci/install.sh",
       "owner": "host",
       "surface": "product",
@@ -119,7 +140,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".chrono-harness/judges.json",
@@ -204,7 +234,11 @@
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
-      "edges": []
+      "edges": [],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": ".chrono-harness/workflow.json",
@@ -248,7 +282,11 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": ".config/mise/conf.d/chrono-harness.toml",
@@ -260,7 +298,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".config/mise/conf.d/selected-chrono-harness.toml",
@@ -272,7 +319,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".github/ISSUE_TEMPLATE/bug.yml",
@@ -334,14 +390,21 @@
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
-      "edges": []
-    },
-    {
-      "path": ".github/workflows/issue-roadmap.yml",
-      "owner": "host",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": []
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".github/workflows/check.yml",
@@ -354,6 +417,27 @@
           "to": "test:host-bootstrap-tests"
         }
       ]
+    },
+    {
+      "path": ".github/workflows/issue-roadmap.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".github/workflows/release.yml",

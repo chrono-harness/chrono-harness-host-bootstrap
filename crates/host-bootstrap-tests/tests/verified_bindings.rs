@@ -5,6 +5,10 @@ use chrono_host_bootstrap::verified_bindings as policy;
 #[path = "../../host-bootstrap/src/verified_bindings.rs"]
 mod policy;
 
+#[cfg(verus_keep_ghost)]
+#[path = "../../../.chrono-harness/ci/host_adapters.rs"]
+mod deployed_host;
+
 use policy::Executable;
 
 use vstd::prelude::*;
