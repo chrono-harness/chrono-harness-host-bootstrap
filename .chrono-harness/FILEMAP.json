@@ -68,8 +68,8 @@
         "role": "program",
         "roots": [
           {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
           }
         ]
       }
@@ -145,8 +145,8 @@
         "role": "program",
         "roots": [
           {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
           }
         ]
       }
@@ -303,8 +303,8 @@
         "role": "program",
         "roots": [
           {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
           }
         ]
       }
@@ -324,8 +324,8 @@
         "role": "program",
         "roots": [
           {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
           }
         ]
       }
@@ -400,8 +400,8 @@
         "role": "program",
         "roots": [
           {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
           }
         ]
       }
@@ -433,8 +433,8 @@
         "role": "program",
         "roots": [
           {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
           }
         ]
       }
@@ -1344,6 +1344,7 @@
         "verify.native-exit",
         "verify.bootstrap-bindings-tests",
         "verify.bootstrap-cargo-tests",
+        "verify.deployed-host",
         "host-bootstrap.owner-check"
       ],
       "timeout_seconds": 600,
