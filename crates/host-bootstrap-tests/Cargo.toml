@@ -35,8 +35,8 @@ name = "report_query"
 path = "tests/report_query.rs"
 
 [dev-dependencies]
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
-vstd = "=0.0.0-2026-04-20-1748"
+toml = { version = "1.2", default-features = false, features = ["parse", "serde", "std"] }
+vstd = "=0.0.0-2026-11-22-0344"
 
 [[test]]
 name = "verified_bindings"
