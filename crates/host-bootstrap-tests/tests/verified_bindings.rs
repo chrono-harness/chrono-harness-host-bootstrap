@@ -21,7 +21,23 @@ mod stage_tests;
 #[path = "proof_support/host-bootstrap/original.rs"]
 mod original_tests;
 
+#[path = "../examples/release_observation.rs"]
+mod release_observation;
+
 verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_accepts_the_expected_observations_only() {
+    let accepted = release_observation::accepts(1, true, true);
+    assert(accepted);
+    let refused_1 = release_observation::accepts(2, true, true);
+    assert(!refused_1);
+    let refused_2 = release_observation::accepts(1, false, true);
+    assert(!refused_2);
+    let refused_3 = release_observation::accepts(1, true, false);
+    assert(!refused_3);
+}
+
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn compiler_exit_and_writer_choose_the_original_stream() {

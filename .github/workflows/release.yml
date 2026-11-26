@@ -51,11 +51,11 @@ jobs:
           set -euo pipefail
           cargo build --release --locked --manifest-path crates/host-bootstrap/Cargo.toml
           binary="$CARGO_TARGET_DIR/release/chrono-host-bootstrap"
-          test "$("$binary" --version)" = 'chrono-host-bootstrap 0.1.0'
+          version=$("$binary" --version)
           code=0
           "$binary" --invalid > "$RUNNER_TEMP/out" 2> "$RUNNER_TEMP/error" || code=$?
-          test "$code" = 1
-          grep -F 'unknown native bootstrap command or arguments' "$RUNNER_TEMP/error"
+          cargo run --quiet --locked --release --manifest-path crates/host-bootstrap-tests/Cargo.toml \
+            --example release_observation -- "$code" "$version" "$RUNNER_TEMP/error"
           mkdir "$RUNNER_TEMP/dist"
           cp "$CARGO_TARGET_DIR/release/chrono-host-bootstrap" "$RUNNER_TEMP/dist/chrono-host-bootstrap-$PLATFORM"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
