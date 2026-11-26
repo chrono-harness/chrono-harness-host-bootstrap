@@ -1,14 +1,33 @@
 //! Bootstrap stream and executable identities use the original file bytes.
+#![allow(unexpected_cfgs)]
+use vstd::prelude::*;
+
+verus! {
+/// Count exactly the bytes written to the output and incorporated into SHA-256.
+pub fn add_stream_bytes(total: u64, read: u64) -> (next: Option<u64>)
+    ensures match next {
+        Some(n) => n as int == total as int + read,
+        None => total as int + read > u64::MAX,
+    },
+{
+    if read <= u64::MAX - total { Some(total + read) } else { None }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use sha2::{Digest, Sha256};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub fn sha256(data: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(data))
+    hex::encode(Sha256::digest(data))
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn copy_hashed(mut input: impl Read, mut output: impl Write) -> Result<(String, u64), String> {
     let mut buffer = [0; 65536];
     let mut hash = Sha256::new();
@@ -20,16 +39,18 @@ pub fn copy_hashed(mut input: impl Read, mut output: impl Write) -> Result<(Stri
         }
         output.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
         hash.update(&buffer[..n]);
-        total = total.checked_add(n as u64).ok_or("stream size overflow")?;
+        total = add_stream_bytes(total, n as u64).ok_or("stream size overflow")?;
     }
-    Ok((format!("{:x}", hash.finalize()), total))
+    Ok((hex::encode(hash.finalize()), total))
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     copy_hashed(
         fs::File::open(path).map_err(|e| e.to_string())?,
         std::io::sink(),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn resolve_program(
     root: &Path,
     program: &str,
@@ -50,6 +71,7 @@ pub fn resolve_program(
         .find(|candidate| candidate.is_file())
         .ok_or_else(error)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn identity(path: &Path) -> Result<String, String> {
     use std::os::unix::fs::MetadataExt;
     let metadata = fs::symlink_metadata(path)
@@ -61,6 +83,7 @@ pub fn identity(path: &Path) -> Result<String, String> {
 }
 
 /// Check the runner wire's lexical relative path before using native host filesystem APIs.
+#[cfg(not(verus_keep_ghost))]
 pub fn relative_path(relative: &str) -> Result<(), String> {
     if relative.is_empty()
         || relative == "."
@@ -75,6 +98,7 @@ pub fn relative_path(relative: &str) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn checked_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     relative_path(relative)?;
     let mut path = root.to_owned();

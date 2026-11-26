@@ -1,11 +1,26 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{cargo, expect};
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::verified_cargo as cargo;
+use vstd::prelude::*;
+#[cfg(not(verus_keep_ghost))]
+#[path = "support/expect.rs"]
+mod expectation;
+#[cfg(not(verus_keep_ghost))]
+use expectation::expect;
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::execution::read_methods;
 
+#[cfg(not(verus_keep_ghost))]
 use std::{
     os::unix::process::ExitStatusExt,
     process::{ExitStatus, Output},
 };
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn bootstrap_queries_the_supplied_registry_and_keeps_duplicate_methods() {
     let bytes = br#"{"projects":[],"scripts":[]}"#;
     let result = read_methods(bytes, |program, arg, input| {
@@ -18,6 +33,7 @@ fn bootstrap_queries_the_supplied_registry_and_keeps_duplicate_methods() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn startup_reports_missing_tools_rejected_registries_and_broken_responses() {
     for (response, error) in [
         (Err("executable not found".into()), "executable not found"),
@@ -44,6 +60,7 @@ fn startup_reports_missing_tools_rejected_registries_and_broken_responses() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
     use chrono_host_bootstrap::proved_build::check_owner_sources;
     use serde_json::json;
@@ -65,7 +82,7 @@ fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
                 request,
                 json!({"operation":"dependency-matches","dependency":raw.as_slice(),
                 "targets":[dependency.as_os_str().as_encoded_bytes(),output.as_os_str().as_encoded_bytes()],
-                "sources":[{"path":path.as_bytes(),"length":15,"sha256":format!("{:x}",Sha256::digest(b"verified source")).as_bytes()}]})
+                "sources":[{"path":path.as_bytes(),"length":15,"sha256":hex::encode(Sha256::digest(b"verified source")).as_bytes()}]})
             );
             Ok(json!(verdict))
         });
@@ -121,6 +138,7 @@ fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn required_proof_collects_the_original_report_library_and_sources() {
     use chrono_host_bootstrap::compiler::OutputContract;
     use chrono_host_bootstrap::proved_build::check_owner_proof;
@@ -179,6 +197,7 @@ fn required_proof_collects_the_original_report_library_and_sources() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn collect_binds_the_requested_operation_to_the_observed_streams_and_artifacts() {
     use chrono_host_bootstrap::{compiler::OutputContract, files::sha256, owner_proof::Proof};
     use serde_json::{Value, json};
@@ -273,4 +292,24 @@ fn collect_binds_the_requested_operation_to_the_observed_streams_and_artifacts()
     mutated["process"]["argv"][9] = json!("different.rs");
     fs::write(&receipt, serde_json::to_vec(&mutated).unwrap()).unwrap();
     assert!(collect("product").is_err());
+}
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_sources_require_a_mode_and_a_matching_native_original() {
+    use cargo::{OwnerSourceMode, NativeHeader};
+    use std::cmp::Ordering::{Less, Equal, Greater};
+    proof { reveal_strlit("native"); reveal_strlit("proof"); reveal_strlit("other");
+        assert("native"@.len() != "proof"@.len() && "other"@.len() != "native"@.len());
+        assert("proof"@[0] != "other"@[0]); }
+    expect(cargo::owner_source_mode("native", 0).is_none());
+    expect(matches!(cargo::owner_source_mode("native", 1), Some(OwnerSourceMode::Native)));
+    expect(matches!(cargo::owner_source_mode("proof", 1), Some(OwnerSourceMode::Proof)));
+    expect(matches!(cargo::owner_source_mode("other", 1), Some(OwnerSourceMode::Unknown)));
+    expect(matches!(cargo::native_header(Equal, None), NativeHeader::Accept));
+    expect(matches!(cargo::native_header(Less, None), NativeHeader::InspectAlias));
+    expect(matches!(cargo::native_header(Greater, Some((true, Equal))), NativeHeader::Accept));
+    expect(matches!(cargo::native_header(Greater, Some((false, Equal))), NativeHeader::Reject));
+    expect(matches!(cargo::native_header(Less, Some((true, Greater))), NativeHeader::Reject));
+}
 }

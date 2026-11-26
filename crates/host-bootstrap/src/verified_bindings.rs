@@ -40,13 +40,20 @@ pub mod environment;
 #[path = "execution.rs"]
 pub mod execution;
 #[cfg(verus_keep_ghost)]
+#[path = "files.rs"]
+pub mod files;
+#[cfg(verus_keep_ghost)]
 #[path = "original.rs"]
 pub mod original;
 #[cfg(verus_keep_ghost)]
 #[path = "registered_methods.rs"]
 pub mod registered_methods;
 #[cfg(not(verus_keep_ghost))]
+pub use crate::files::add_stream_bytes;
+#[cfg(not(verus_keep_ghost))]
 pub use crate::original::operation_record_matches;
+#[cfg(verus_keep_ghost)]
+pub use files::add_stream_bytes;
 #[cfg(verus_keep_ghost)]
 pub use original::operation_record_matches;
 

@@ -21,6 +21,10 @@ mod stage_tests;
 #[path = "proof_support/host-bootstrap/original.rs"]
 mod original_tests;
 
+#[cfg(verus_keep_ghost)]
+#[path = "bindings.rs"]
+mod bindings_boundaries;
+
 // Cargo builds this same release obligation as an executable for the publishing workflow.
 mod release_observation {
     #[cfg(not(verus_keep_ghost))]
@@ -726,18 +730,7 @@ fn registry_rejects_direct_or_native_overrides_even_when_bindings_are_optional()
     expect(matches!(direct, policy::DeclarationSource::Reject) && matches!(native, policy::DeclarationSource::Reject) && matches!(both, policy::DeclarationSource::Reject));
 }
 
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn required_direct_bindings_need_a_matching_platform_and_declaration() {
-    let accepted = policy::declaration_source(false, true, true, true, true);
-    let wrong = policy::declaration_source(false, true, true, true, false);
-    let missing = policy::declaration_source(false, false, true, true, true);
-    let missing_platform = policy::declaration_source(false, true, false, true, true);
-    let optional = policy::declaration_source(false, true, false, false, false);
-    let unbound = policy::declaration_source(false, false, false, false, false);
-    expect(matches!(accepted, policy::DeclarationSource::Direct) && matches!(optional, policy::DeclarationSource::Direct));
-    expect(matches!(wrong, policy::DeclarationSource::Reject) && matches!(missing, policy::DeclarationSource::Reject) && matches!(missing_platform, policy::DeclarationSource::Reject));
-    expect(matches!(unbound, policy::DeclarationSource::Unbound));
-}
+
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn relocation_keeps_digest_and_version_and_only_ignores_the_old_path() {
