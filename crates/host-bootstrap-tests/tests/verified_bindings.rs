@@ -77,6 +77,35 @@ fn main() -> Result<(), String> {
     release_observation::evaluate_observations()
 }
 
+#[cfg(all(test, not(verus_keep_ghost)))]
+#[test]
+fn registration_failures_keep_the_first_diagnostic_and_strip_one_lf() {
+    use chrono_host_bootstrap::execution::read_methods;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::{ExitStatus, Output};
+    for (stderr, expected) in [
+        (b"".as_slice(), "registration query failed: exit status: 17"),
+        (b"\n", ""),
+        (b"\n\n", "\n"),
+        ("issue λ\r\n".as_bytes(), "issue λ\r"),
+        (b"problem", "problem"),
+        (
+            &[0xff, b'\n'],
+            "invalid utf-8 sequence of 1 bytes from index 0",
+        ),
+    ] {
+        let error = read_methods(b"registry", |_, _, _| {
+            Ok(Output {
+                status: ExitStatus::from_raw(17 << 8),
+                stdout: b"{".to_vec(),
+                stderr: stderr.to_vec(),
+            })
+        })
+        .unwrap_err();
+        assert_eq!(error, expected);
+    }
+}
+
 #[cfg(verus_keep_ghost)]
 use policy::registered_methods::diagnostic_length;
 
