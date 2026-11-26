@@ -446,7 +446,11 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": "crates/host-bootstrap-tests/tests/bindings.rs",
@@ -619,27 +623,6 @@
           "to": "test:host-bootstrap-tests"
         }
       ]
-    },
-    {
-      "path": "crates/host-bootstrap-tests/examples/release_observation.rs",
-      "owner": "host-bootstrap-tests",
-      "surface": "test",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:host-bootstrap-tests"
-        }
-      ],
-      "verification": {
-        "role": "program",
-        "roots": [
-          {
-            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
-            "operation": "verify.bootstrap-bindings-tests"
-          }
-        ]
-      }
     },
     {
       "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
