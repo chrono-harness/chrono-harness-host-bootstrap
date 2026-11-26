@@ -35,6 +35,7 @@ name = "report_query"
 path = "tests/report_query.rs"
 
 [dev-dependencies]
+serde_yaml = { package = "serde_yaml_ng", version = "=0.10.0" }
 hex = "0.4"
 toml = { version = "1.2", default-features = false, features = ["parse", "serde", "std"] }
 vstd = "=0.0.0-2026-04-20-1748"
