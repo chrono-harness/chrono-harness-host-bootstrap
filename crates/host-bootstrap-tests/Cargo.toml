@@ -52,3 +52,7 @@ path = "tests/template.rs"
 [[test]]
 name = "native_scratch"
 path = "tests/native_scratch.rs"
+
+[[example]]
+name = "release_observation"
+path = "tests/verified_bindings.rs"
