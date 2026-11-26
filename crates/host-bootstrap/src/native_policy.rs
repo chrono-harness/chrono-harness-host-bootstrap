@@ -6,6 +6,22 @@ use vstd::prelude::*;
 
 verus! {
 
+pub fn process_exit(code: Option<i32>, signal: Option<i32>) -> (out: Option<i32>)
+    ensures
+        code is Some ==> out == code,
+        code is None && signal is Some && signal.unwrap() > 0
+            ==> out is Some && out.unwrap() == -signal.unwrap(),
+        code is None && (signal is None || signal.unwrap() <= 0) ==> out is None,
+{
+    match code {
+        Some(value) => Some(value),
+        None => match signal {
+            Some(value) => if value > 0 { Some(-value) } else { None },
+            None => None,
+        },
+    }
+}
+
 /// Translate a Unix child observation into the exit code returned to the calling shell.
 pub fn shell_exit(code: Option<i32>, signal: Option<i32>) -> (exit: u8)
     ensures exit as int == match code {
@@ -16,7 +32,7 @@ pub fn shell_exit(code: Option<i32>, signal: Option<i32>) -> (exit: u8)
         },
     },
 {
-    match super::process_exit(code, signal) {
+    match process_exit(code, signal) {
         Some(status) if 0 <= status && status <= 255 => status as u8,
         Some(status) if code.is_none() && -127 <= status && status < 0 => (128 - status) as u8,
         _ => 1,

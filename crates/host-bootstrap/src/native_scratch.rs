@@ -1,20 +1,63 @@
 //! One lease covers the private compilation directory and the entire native process.
+#[cfg(verus_keep_ghost)]
+#[path = "native_policy.rs"]
+mod native_policy;
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_bindings::native_policy;
+use vstd::prelude::*;
+
+verus! {
+enum NativeOutcome { CleanUp, Retain(u8) }
+
+/// Successful children release the scratch directory. Failed children keep their status.
+fn native_outcome(code: Option<i32>, signal: Option<i32>) -> (outcome: NativeOutcome)
+    ensures match outcome {
+        NativeOutcome::CleanUp => code == Some(0),
+        NativeOutcome::Retain(exit) => code != Some(0) && exit > 0 && exit as int == match code {
+            Some(value) => if 1 <= value <= 255 { value as int } else { 1int },
+            None => match signal {
+                Some(value) => if 1 <= value <= 127 { 128 + value as int } else { 1int },
+                None => 1int,
+            },
+        },
+    },
+{
+    match native_policy::shell_exit(code, signal) {
+        0 => NativeOutcome::CleanUp,
+        exit => NativeOutcome::Retain(exit),
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use std::collections::HashSet;
+#[cfg(not(verus_keep_ghost))]
 use std::ffi::{OsStr, OsString};
+#[cfg(not(verus_keep_ghost))]
 use std::fs::{self, File, OpenOptions};
+#[cfg(not(verus_keep_ghost))]
 use std::io::{self, ErrorKind};
+#[cfg(not(verus_keep_ghost))]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(not(verus_keep_ghost))]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+#[cfg(not(verus_keep_ghost))]
 use std::os::unix::process::{CommandExt, ExitStatusExt};
+#[cfg(not(verus_keep_ghost))]
 use std::path::{Path, PathBuf};
+#[cfg(not(verus_keep_ghost))]
 use std::process::Command;
+#[cfg(not(verus_keep_ghost))]
 use std::time::{Duration, SystemTime};
 
+#[cfg(not(verus_keep_ghost))]
 const BUSINESS: &str = "target/native-checks";
+#[cfg(not(verus_keep_ghost))]
 const PREFIX: &str = "check-";
+#[cfg(not(verus_keep_ghost))]
 const OWNER: &str = ".chrono-native-owner";
 
+#[cfg(not(verus_keep_ghost))]
 fn physical_directory(path: &Path) -> io::Result<File> {
     OpenOptions::new()
         .read(true)
@@ -22,15 +65,16 @@ fn physical_directory(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn directory(root: &Path, create: bool) -> io::Result<(PathBuf, File)> {
     let mut path = root.to_owned();
     for component in Path::new(BUSINESS).components() {
         path.push(component);
-        if create
-            && let Err(error) = fs::create_dir(&path)
-            && error.kind() != ErrorKind::AlreadyExists
-        {
-            return Err(error);
+        if create {
+            match fs::create_dir(&path) {
+                Err(error) if error.kind() != ErrorKind::AlreadyExists => return Err(error),
+                _ => {}
+            }
         }
         physical_directory(&path)?;
     }
@@ -39,10 +83,12 @@ fn directory(root: &Path, create: bool) -> io::Result<(PathBuf, File)> {
     Ok((path, gate))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn identity(metadata: &fs::Metadata) -> String {
     format!("{} {}\n", metadata.dev(), metadata.ino())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn tracked(root: &Path, git: &OsStr) -> io::Result<HashSet<OsString>> {
     let out = Command::new(git)
         .current_dir(root)
@@ -75,6 +121,7 @@ fn tracked(root: &Path, git: &OsStr) -> io::Result<HashSet<OsString>> {
     Ok(protected)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn dispose(path: &Path, protected: &HashSet<OsString>, age: Option<Duration>) -> io::Result<bool> {
     let name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
     let generated = name.strip_prefix(PREFIX).is_some_and(|suffix| {
@@ -151,6 +198,7 @@ fn dispose(path: &Path, protected: &HashSet<OsString>, age: Option<Duration>) ->
 }
 
 /// Report a failure to refresh the retained directory without losing the child outcome.
+#[cfg(not(verus_keep_ghost))]
 pub fn record_failure(
     exit: u8,
     scratch: &Path,
@@ -169,6 +217,7 @@ pub fn record_failure(
 
 /// Run the host's native program with its private scratch path in CHRONO_NATIVE_SCRATCH.
 /// The child inherits the shared lock even if its bootstrap parent is interrupted.
+#[cfg(not(verus_keep_ghost))]
 pub fn run(root: &Path, program: &OsStr, args: &[OsString], git: &OsStr) -> io::Result<u8> {
     let (business, gate) = directory(root, true)?;
     let scratch = tempfile::Builder::new()
@@ -195,8 +244,7 @@ pub fn run(root: &Path, program: &OsStr, args: &[OsString], git: &OsStr) -> io::
     }
     let status = cmd.status()?;
     drop(cmd);
-    let exit = native_policy::shell_exit(status.code(), status.signal());
-    if exit != 0 {
+    if let NativeOutcome::Retain(exit) = native_outcome(status.code(), status.signal()) {
         return Ok(record_failure(
             exit,
             &scratch,
@@ -213,6 +261,7 @@ pub fn run(root: &Path, program: &OsStr, args: &[OsString], git: &OsStr) -> io::
 }
 
 /// Sweep this host's dedicated native build area from the host's periodic maintenance.
+#[cfg(not(verus_keep_ghost))]
 pub fn maintain(root: &Path, seconds: u64, git: &OsStr) -> io::Result<usize> {
     if seconds == 0 {
         return Err(io::Error::other("retention must be positive"));
