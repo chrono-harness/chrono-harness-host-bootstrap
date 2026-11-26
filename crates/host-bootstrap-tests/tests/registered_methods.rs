@@ -44,6 +44,31 @@ fn startup_reports_missing_tools_rejected_registries_and_broken_responses() {
 }
 
 #[test]
+fn registration_failures_keep_the_first_diagnostic_and_strip_one_lf() {
+    for (stderr, expected) in [
+        (b"".as_slice(), "registration query failed: exit status: 17"),
+        (b"\n", ""),
+        (b"\n\n", "\n"),
+        ("issue λ\r\n".as_bytes(), "issue λ\r"),
+        (b"problem", "problem"),
+        (
+            &[0xff, b'\n'],
+            "invalid utf-8 sequence of 1 bytes from index 0",
+        ),
+    ] {
+        let error = read_methods(b"registry", |_, _, _| {
+            Ok(Output {
+                status: ExitStatus::from_raw(17 << 8),
+                stdout: b"{".to_vec(),
+                stderr: stderr.to_vec(),
+            })
+        })
+        .unwrap_err();
+        assert_eq!(error, expected);
+    }
+}
+
+#[test]
 fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
     use chrono_host_bootstrap::proved_build::check_owner_sources;
     use serde_json::json;

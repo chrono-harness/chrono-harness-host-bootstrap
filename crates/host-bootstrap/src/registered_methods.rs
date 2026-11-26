@@ -1,5 +1,32 @@
 //! Bootstrap consumes execution-methods before selecting the host build toolchain.
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// The registration protocol drops exactly one trailing LF from decoded diagnostics.
+pub fn diagnostic_length(bytes: &[u8]) -> (length: usize)
+    ensures length == if bytes@.len() > 0 && bytes@[bytes@.len() - 1] == 10 {
+        bytes@.len() - 1
+    } else {
+        bytes@.len() as int
+    },
+{
+    let length = bytes.len();
+    if length > 0 && bytes[length - 1] == 10 {
+        length - 1
+    } else {
+        length
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::{CompilerError, compiler_output};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     io::Write,
@@ -7,6 +34,7 @@ use std::{
     thread,
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Method {
@@ -18,25 +46,46 @@ pub struct Method {
     pub output_contract: Option<crate::compiler::OutputContract>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 /// Read the registration response through the supplied command transport.
 pub fn read_methods(
     registry: &[u8],
     invoke: impl FnOnce(&str, &str, &[u8]) -> Result<Output, String>,
 ) -> Result<BTreeMap<String, Vec<Method>>, String> {
-    let output = invoke("chrono-judge-registration", "execution-methods", registry)?;
-    if !output.status.success() {
-        let reason = String::from_utf8(output.stderr).map_err(|error| error.to_string())?;
-        return Err(if reason.is_empty() {
-            format!("registration query failed: {}", output.status)
-        } else {
-            reason.strip_suffix('\n').unwrap_or(&reason).to_owned()
-        });
-    }
-    crate::codec::decode(&output.stdout)
+    query_methods(registry, |program, argument, input| {
+        invoke(program, argument, input).map(|output| (output, Ok(())))
+    })
 }
 
+#[cfg(not(verus_keep_ghost))]
+fn query_methods(
+    registry: &[u8],
+    invoke: impl FnOnce(&str, &str, &[u8]) -> Result<(Output, std::io::Result<()>), String>,
+) -> Result<BTreeMap<String, Vec<Method>>, String> {
+    let (output, written) = invoke("chrono-judge-registration", "execution-methods", registry)?;
+    let stdout = compiler_output(
+        output.status.success(),
+        output.stdout,
+        output.stderr,
+        written,
+    )
+    .map_err(|error| match error {
+        CompilerError::Status => format!("registration query failed: {}", output.status),
+        CompilerError::Write(error) => error.to_string(),
+        CompilerError::Diagnostic(bytes) => match String::from_utf8(bytes) {
+            Ok(mut reason) => {
+                reason.truncate(diagnostic_length(reason.as_bytes()));
+                reason
+            }
+            Err(error) => error.to_string(),
+        },
+    })?;
+    crate::codec::decode(&stdout)
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn methods(registry: &[u8]) -> Result<BTreeMap<String, Vec<Method>>, String> {
-    read_methods(registry, |program, argument, input| {
+    query_methods(registry, |program, argument, input| {
         let executable = crate::files::resolve_program(std::path::Path::new("."), program, None)?;
         let mut child = Command::new(executable)
             .env_clear()
@@ -54,10 +103,7 @@ pub(crate) fn methods(registry: &[u8]) -> Result<BTreeMap<String, Vec<Method>>, 
                 .join()
                 .map_err(|_| "registration input writer panicked")?;
             let output = result.map_err(|error| error.to_string())?;
-            if output.status.success() {
-                written.map_err(|error| error.to_string())?;
-            }
-            Ok(output)
+            Ok((output, written))
         })
     })
 }

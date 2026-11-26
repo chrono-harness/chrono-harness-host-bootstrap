@@ -40,6 +40,9 @@ pub mod environment;
 #[path = "execution.rs"]
 pub mod execution;
 #[cfg(verus_keep_ghost)]
+#[path = "registered_methods.rs"]
+pub mod registered_methods;
+#[cfg(verus_keep_ghost)]
 #[path = "original.rs"]
 pub mod original;
 #[cfg(not(verus_keep_ghost))]

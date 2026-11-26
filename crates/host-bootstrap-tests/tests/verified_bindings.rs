@@ -30,8 +30,8 @@ mod release_observation {
 
     verus! {
     pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.0"@,
-    { "chrono-host-bootstrap 0.1.0" }
+        ensures value@ == "chrono-host-bootstrap 0.1.2"@,
+    { "chrono-host-bootstrap 0.1.2" }
 
     pub fn diagnostic() -> (value: &'static str)
         ensures value@ == "unknown native bootstrap command or arguments"@,
@@ -77,7 +77,25 @@ fn main() -> Result<(), String> {
     release_observation::evaluate_observations()
 }
 
+#[cfg(verus_keep_ghost)]
+use policy::registered_methods::diagnostic_length;
+
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn registration_keeps_every_byte_except_one_final_lf(bytes: &[u8]) {
+    let length = diagnostic_length(bytes);
+    proof {
+        if bytes@.len() == 0 {
+            assert(length == 0);
+        } else if bytes@[bytes@.len() - 1] == 10 {
+            assert(length + 1 == bytes@.len());
+        } else {
+            assert(length == bytes@.len());
+        }
+    }
+}
+
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn release_accepts_the_expected_observations_only() {
