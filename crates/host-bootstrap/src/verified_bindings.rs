@@ -42,6 +42,9 @@ pub mod execution;
 #[cfg(verus_keep_ghost)]
 #[path = "original.rs"]
 pub mod original;
+#[cfg(verus_keep_ghost)]
+#[path = "registered_methods.rs"]
+pub mod registered_methods;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::original::operation_record_matches;
 #[cfg(verus_keep_ghost)]

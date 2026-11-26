@@ -506,7 +506,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap-tests/Cargo.lock",
@@ -764,7 +773,11 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": "crates/host-bootstrap/Cargo.toml",
@@ -776,7 +789,11 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": "crates/host-bootstrap/src/artifact_identity.rs",
@@ -1170,7 +1187,20 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap/src/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings"
+          },
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap/src/report_query.rs",
