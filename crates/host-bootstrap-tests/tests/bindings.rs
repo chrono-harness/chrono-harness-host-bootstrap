@@ -1,8 +1,25 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::verified_bindings as policy;
+use vstd::prelude::*;
+#[cfg(not(verus_keep_ghost))]
+#[path = "support/expect.rs"]
+mod expectation;
+#[cfg(not(verus_keep_ghost))]
+use expectation::expect;
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::bindings::{Declarations, Environment, NativePlatform};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use sha2::{Digest, Sha256};
+#[cfg(not(verus_keep_ghost))]
 use std::{collections::BTreeMap, fs, path::PathBuf, process::Command};
 
+#[cfg(not(verus_keep_ghost))]
 fn native() -> NativePlatform {
     NativePlatform {
         system: "fixture-system".into(),
@@ -10,10 +27,12 @@ fn native() -> NativePlatform {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bytes(value: &Value) -> Vec<u8> {
     serde_json::to_vec(value).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn direct() -> Value {
     let binding = json!({"path":"old/tool", "sha256":"0".repeat(64), "version":"fixture", "allow_relocation":true});
     json!({"require_tool_bindings":true,
@@ -22,6 +41,7 @@ fn direct() -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn current_json_boundary_preserves_required_bindings_and_rejects_ambiguity() {
     assert!(
         Declarations::parse(b"{}", &native(), None)
@@ -70,6 +90,7 @@ fn current_json_boundary_preserves_required_bindings_and_rejects_ambiguity() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registry_reads_only_the_explicit_platform_and_keeps_exact_tool_keys() {
     let config = bytes(&json!({"rust_toolchain":"1.95.0", "tool_bindings_registry":"registered"}));
     let tool = json!({"sha256":"0".repeat(64), "version":"fixture", "component":{"url":"unused-source-data"}});
@@ -99,6 +120,7 @@ fn registry_reads_only_the_explicit_platform_and_keeps_exact_tool_keys() {
     assert!(Declarations::parse(&config, &native(), None).is_err());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn selected(rustup: &PathBuf, name: &str) -> PathBuf {
     let result = Command::new(rustup)
         .args(["which", "--toolchain", "1.95.0", name])
@@ -112,6 +134,7 @@ fn selected(rustup: &PathBuf, name: &str) -> PathBuf {
     PathBuf::from(String::from_utf8(result.stdout).unwrap().trim())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn real_binding(path: &PathBuf) -> Value {
     let version = Command::new(path)
         .arg("--version")
@@ -124,6 +147,7 @@ fn real_binding(path: &PathBuf) -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn actual_rustup_tools_keep_identity_relocation_and_inherited_compiler_constraints() {
     let directory = tempfile::tempdir().unwrap();
     let root = fs::canonicalize(directory.path()).unwrap();
@@ -218,4 +242,27 @@ fn actual_rustup_tools_keep_identity_relocation_and_inherited_compiler_constrain
             .unwrap_err()
             .contains("relocation")
     );
+}
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn required_direct_bindings_need_a_matching_platform_and_declaration() {
+    let accepted = policy::declaration_source(false, true, true, true, true);
+    let wrong = policy::declaration_source(false, true, true, true, false);
+    let missing = policy::declaration_source(false, false, true, true, true);
+    let missing_platform = policy::declaration_source(false, true, false, true, true);
+    let optional = policy::declaration_source(false, true, false, false, false);
+    let unbound = policy::declaration_source(false, false, false, false, false);
+    expect(matches!(accepted, policy::DeclarationSource::Direct) && matches!(optional, policy::DeclarationSource::Direct));
+    expect(matches!(wrong, policy::DeclarationSource::Reject) && matches!(missing, policy::DeclarationSource::Reject) && matches!(missing_platform, policy::DeclarationSource::Reject));
+    expect(matches!(unbound, policy::DeclarationSource::Unbound));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn a_full_chunk_may_end_exactly_at_the_limit() {
+    expect(matches!(policy::add_stream_bytes(u64::MAX - 8, 8), Some(v) if v == u64::MAX));
+    expect(policy::add_stream_bytes(u64::MAX - 8, 9).is_none());
+    expect(matches!(policy::add_stream_bytes(0, 0), Some(0)));
+}
+
 }

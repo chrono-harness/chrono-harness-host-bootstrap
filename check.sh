@@ -43,7 +43,7 @@ library=${metadata%/*}/${stem%.rmeta}
 
 src=crates/host-bootstrap/src
 tests=crates/host-bootstrap-tests/tests
-binding_modules=(native_policy.rs verified_cargo.rs artifact_identity.rs construction.rs lifecycle.rs owner.rs profile.rs environment.rs execution.rs original.rs registered_methods.rs)
+binding_modules=(native_policy.rs verified_cargo.rs artifact_identity.rs construction.rs lifecycle.rs owner.rs profile.rs environment.rs execution.rs original.rs registered_methods.rs files.rs)
 native_sources=(src/native_scratch.rs src/template.rs src/lib.rs src/verified_bindings.rs src/cargo_proofs.rs src/proved_build.rs src/source.rs)
 "$bootstrap" check-compiler-sources native "$library" "${native_sources[@]}" "${binding_modules[@]/#/src/}"
 
@@ -69,6 +69,6 @@ collect verify.bootstrap-bindings "$src/verified_bindings.rs" "${binding_modules
 collect verify.bootstrap-bindings-tests "$tests/verified_bindings.rs" "$included/verified_bindings.rs" \
   "${binding_modules[@]/#/$included/}" "$tests/support/expect.rs" \
   "$tests/proof_support/host-bootstrap/construction.rs" "$tests/proof_support/host-bootstrap/owner.rs" \
-  "$tests/proof_support/host-bootstrap/original.rs"
+  "$tests/proof_support/host-bootstrap/original.rs" "$tests/bindings.rs"
 collect verify.bootstrap-cargo-tests "$tests/verified_cargo.rs" "$included/verified_cargo.rs" \
-  "$included/artifact_identity.rs" "$tests/support/expect.rs"
+  "$included/artifact_identity.rs" "$tests/support/expect.rs" "$tests/registered_methods.rs"
