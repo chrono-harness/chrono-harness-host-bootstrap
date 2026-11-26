@@ -119,7 +119,7 @@ fn real_binding(path: &PathBuf) -> Value {
         .output()
         .unwrap();
     assert!(version.status.success());
-    json!({"path":path, "sha256":format!("{:x}", Sha256::digest(fs::read(path).unwrap())),
+    json!({"path":path, "sha256":hex::encode(Sha256::digest(fs::read(path).unwrap())),
         "version":String::from_utf8(version.stdout).unwrap().trim()})
 }
 

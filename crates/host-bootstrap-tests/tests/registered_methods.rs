@@ -65,7 +65,7 @@ fn owner_checks_submit_original_compiler_bytes_and_exact_file_identities() {
                 request,
                 json!({"operation":"dependency-matches","dependency":raw.as_slice(),
                 "targets":[dependency.as_os_str().as_encoded_bytes(),output.as_os_str().as_encoded_bytes()],
-                "sources":[{"path":path.as_bytes(),"length":15,"sha256":format!("{:x}",Sha256::digest(b"verified source")).as_bytes()}]})
+                "sources":[{"path":path.as_bytes(),"length":15,"sha256":hex::encode(Sha256::digest(b"verified source")).as_bytes()}]})
             );
             Ok(json!(verdict))
         });
