@@ -111,7 +111,7 @@ fn compiler_exit_and_writer_choose_the_original_stream() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn native_shell_exit_preserves_normal_codes_and_maps_signals() {
-    use policy::native_scratch::shell_exit;
+    use policy::native_policy::shell_exit;
     expect(shell_exit(Some(0), None) == 0);
     expect(shell_exit(Some(42), Some(15)) == 42);
     expect(shell_exit(Some(255), None) == 255);

@@ -19,12 +19,6 @@ pub use artifact_identity::valid_sha256;
 use artifact_identity::{equal_bytes, equal_text, valid_oid};
 
 #[cfg(verus_keep_ghost)]
-#[path = "native_scratch.rs"]
-pub mod native_scratch;
-#[cfg(not(verus_keep_ghost))]
-pub use crate::native_scratch;
-
-#[cfg(verus_keep_ghost)]
 #[path = "construction.rs"]
 pub mod construction;
 #[cfg(verus_keep_ghost)]

@@ -6,6 +6,23 @@ use vstd::prelude::*;
 
 verus! {
 
+/// Translate a Unix child observation into the exit code returned to the calling shell.
+pub fn shell_exit(code: Option<i32>, signal: Option<i32>) -> (exit: u8)
+    ensures exit as int == match code {
+        Some(value) => if 0 <= value <= 255 { value as int } else { 1int },
+        None => match signal {
+            Some(value) => if 1 <= value <= 127 { 128 + value as int } else { 1int },
+            None => 1int,
+        },
+    },
+{
+    match super::process_exit(code, signal) {
+        Some(status) if 0 <= status && status <= 255 => status as u8,
+        Some(status) if code.is_none() && -127 <= status && status < 0 => (128 - status) as u8,
+        _ => 1,
+    }
+}
+
 /// Skip unrelated names and protected Git inputs before opening a candidate.
 pub fn candidate(generated: bool, git_protected: bool) -> (allow: bool)
     ensures allow == (generated && !git_protected),
