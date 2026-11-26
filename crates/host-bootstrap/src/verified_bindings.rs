@@ -6,6 +6,7 @@ use vstd::prelude::*;
 
 #[path = "native_policy.rs"]
 pub mod native_policy;
+pub use native_policy::process_exit;
 
 #[cfg(verus_keep_ghost)]
 #[path = "verified_cargo.rs"]
@@ -503,22 +504,6 @@ pub fn source_identity(before: SourceObservation, after: SourceObservation) -> (
         (copy_optional_text(&before.commit), copy_optional_text(&before.tree))
     } else { (None, None) };
     SourceIdentity { state, commit, tree, before, after }
-}
-
-pub fn process_exit(code: Option<i32>, signal: Option<i32>) -> (out: Option<i32>)
-    ensures
-        code is Some ==> out == code,
-        code is None && signal is Some && signal.unwrap() > 0
-            ==> out is Some && out.unwrap() == -signal.unwrap(),
-        code is None && (signal is None || signal.unwrap() <= 0) ==> out is None,
-{
-    match code {
-        Some(value) => Some(value),
-        None => match signal {
-            Some(value) => if value > 0 { Some(-value) } else { None },
-            None => None,
-        },
-    }
 }
 
 pub enum ProbeAction { Ready, InstallMinimal, AddFormat }

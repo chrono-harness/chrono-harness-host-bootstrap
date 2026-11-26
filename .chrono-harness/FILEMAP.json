@@ -962,7 +962,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap/src/native_scratch.rs",
+            "operation": "verify.native-exit"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap/src/original.rs",
@@ -1244,6 +1253,7 @@
     "test:host-bootstrap-tests": {
       "operations": [
         "verify.bootstrap-bindings",
+        "verify.native-exit",
         "verify.bootstrap-bindings-tests",
         "verify.bootstrap-cargo-tests",
         "host-bootstrap.owner-check"
