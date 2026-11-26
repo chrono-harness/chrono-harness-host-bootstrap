@@ -12,8 +12,8 @@ enum NativeOutcome { CleanUp, Retain(u8) }
 /// Successful children release the scratch directory. Failed children keep their status.
 fn native_outcome(code: Option<i32>, signal: Option<i32>) -> (outcome: NativeOutcome)
     ensures match outcome {
-        NativeOutcome::CleanUp => code == Some(0),
-        NativeOutcome::Retain(exit) => code != Some(0) && exit > 0 && exit as int == match code {
+        NativeOutcome::CleanUp => code == Some(0i32),
+        NativeOutcome::Retain(exit) => code != Some(0i32) && exit > 0 && exit as int == match code {
             Some(value) => if 1 <= value <= 255 { value as int } else { 1int },
             None => match signal {
                 Some(value) => if 1 <= value <= 127 { 128 + value as int } else { 1int },
