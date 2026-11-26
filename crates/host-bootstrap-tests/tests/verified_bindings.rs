@@ -110,6 +110,22 @@ fn compiler_exit_and_writer_choose_the_original_stream() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn native_shell_exit_preserves_normal_codes_and_maps_signals() {
+    use policy::native_scratch::shell_exit;
+    expect(shell_exit(Some(0), None) == 0);
+    expect(shell_exit(Some(42), Some(15)) == 42);
+    expect(shell_exit(Some(255), None) == 255);
+    expect(shell_exit(None, Some(9)) == 137);
+    expect(shell_exit(None, Some(15)) == 143);
+    expect(shell_exit(None, Some(127)) == 255);
+    expect(shell_exit(None, None) == 1);
+    expect(shell_exit(None, Some(0)) == 1);
+    expect(shell_exit(Some(-1), None) == 1);
+    expect(shell_exit(Some(256), None) == 1);
+    expect(shell_exit(None, Some(128)) == 1);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn native_directory_decisions_require_time_identity_and_exclusive_use() {
     use policy::native_policy::*;
     expect(candidate(true,false));
@@ -955,4 +971,26 @@ fn prepared_environment_selects_all_paths_before_creating_any_directory() {
         assert!(!root.join(".chrono-harness").exists());
     }
     assert_eq!(inherited[OsStr::new("HOME")], "/inherited");
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn native_scratch_keeps_the_child_failure_when_its_timestamp_cannot_be_refreshed() {
+    use chrono_host_bootstrap::native_scratch::record_failure;
+    use std::{io, path::Path};
+
+    let mut diagnostics = Vec::new();
+    let error = io::Error::other("injected timestamp error");
+    assert_eq!(
+        record_failure(143, Path::new("fixture"), Err(error), &mut diagnostics),
+        143
+    );
+    let text = String::from_utf8(diagnostics).unwrap();
+    assert!(text.contains("fixture") && text.contains("injected timestamp error"));
+    let mut diagnostics = Vec::new();
+    assert_eq!(
+        record_failure(42, Path::new("fixture"), Ok(()), &mut diagnostics),
+        42
+    );
+    assert!(diagnostics.is_empty());
 }
