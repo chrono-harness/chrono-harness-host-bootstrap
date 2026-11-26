@@ -87,8 +87,10 @@ fn query_methods(
 pub(crate) fn methods(registry: &[u8]) -> Result<BTreeMap<String, Vec<Method>>, String> {
     query_methods(registry, |program, argument, input| {
         let executable = crate::files::resolve_program(std::path::Path::new("."), program, None)?;
+        let search = std::env::var_os("PATH").ok_or("PATH is missing")?;
         let mut child = Command::new(executable)
             .env_clear()
+            .env("PATH", search)
             .arg(argument)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

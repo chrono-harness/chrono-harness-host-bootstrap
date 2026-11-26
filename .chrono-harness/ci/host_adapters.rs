@@ -57,6 +57,11 @@ pub fn installed_config() -> (s: &'static str) {
     include_str!("../../.config/mise/conf.d/selected-chrono-harness.toml")
 }
 
+/// The native owner check compares the registered modules against compiler dep-info.
+pub fn native_owner_check() -> (source: &'static str) {
+    include_str!("../../check.sh")
+}
+
 pub fn deployed_tool_installer() -> (source: &'static str) {
     include_str!("../install-tools.sh")
 }
@@ -83,6 +88,22 @@ pub fn roadmap_matches(script: &String, workflow: &String) -> (accepted: bool)
 #[cfg(not(verus_keep_ghost))]
 mod native {
     use super::*;
+
+    #[test]
+    fn registration_reply_is_in_the_native_proof_collection() {
+        let declaration = super::native_owner_check()
+            .lines()
+            .find_map(|line| line.strip_prefix("binding_modules=("))
+            .and_then(|line| line.strip_suffix(')'))
+            .unwrap();
+        assert_eq!(
+            declaration
+                .split_ascii_whitespace()
+                .filter(|name| *name == "registered_methods.rs")
+                .count(),
+            1
+        );
+    }
 
     #[test]
     fn deployed_tool_installer_matches_the_selected_template() {

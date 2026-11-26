@@ -506,7 +506,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": ".chrono-harness/ci/host_adapters.rs",
+            "operation": "verify.deployed-host"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap-tests/Cargo.lock",
