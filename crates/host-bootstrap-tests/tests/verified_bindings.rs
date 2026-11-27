@@ -25,6 +25,20 @@ mod original_tests;
 #[path = "bindings.rs"]
 mod bindings_boundaries;
 
+#[cfg(verus_keep_ghost)]
+verus! {
+    fn cargo_root_collection_and_replay_have_distinct_entry_points() {
+        use policy::cargo_commands::cargo_command;
+        proof { reveal_strlit("collect"); reveal_strlit("collect-cargo-proof");
+            reveal_strlit("collect-cargo-proof-original"); reveal_strlit("validate-cargo-proof-originals"); }
+        let report = cargo_command("collect-cargo-proof");
+        let original = cargo_command("collect-cargo-proof-original");
+        let replay = cargo_command("validate-cargo-proof-originals");
+        let unknown = cargo_command("collect");
+        assert(report is Report && original is Original && replay is Replay && unknown is Other);
+    }
+}
+
 // Cargo builds this same release obligation as an executable for the publishing workflow.
 mod release_observation {
     #[cfg(not(verus_keep_ghost))]
@@ -33,29 +47,20 @@ mod release_observation {
     use vstd::prelude::*;
 
     verus! {
-    #[cfg(verus_keep_ghost)]
-    fn cargo_root_collection_and_replay_have_distinct_entry_points() {
-        use policy::cargo_commands::{cargo_command,CargoCommand};
-        assert(cargo_command("collect-cargo-proof") == CargoCommand::Report);
-        assert(cargo_command("collect-cargo-proof-original") == CargoCommand::Original);
-        assert(cargo_command("validate-cargo-proof-originals") == CargoCommand::Replay);
-        assert(cargo_command("collect") == CargoCommand::Other);
+    pub fn version_text() -> (value: &'static str)
+        ensures value@ == "chrono-host-bootstrap 0.1.6"@,
+    { "chrono-host-bootstrap 0.1.6" }
+
+    pub fn diagnostic() -> (value: &'static str)
+        ensures value@ == "unknown native bootstrap command or arguments"@,
+    { "unknown native bootstrap command or arguments" }
+
+    pub fn accepts(exit: i32, version_ok: bool, error_matches: bool) -> (accepted: bool)
+        ensures accepted == (exit == 1 && version_ok && error_matches),
+    {
+        exit == 1 && version_ok && error_matches
     }
-
-        pub fn version_text() -> (value: &'static str)
-            ensures value@ == "chrono-host-bootstrap 0.1.2"@,
-        { "chrono-host-bootstrap 0.1.2" }
-
-        pub fn diagnostic() -> (value: &'static str)
-            ensures value@ == "unknown native bootstrap command or arguments"@,
-        { "unknown native bootstrap command or arguments" }
-
-        pub fn accepts(exit: i32, version_ok: bool, error_matches: bool) -> (accepted: bool)
-            ensures accepted == (exit == 1 && version_ok && error_matches),
-        {
-            exit == 1 && version_ok && error_matches
-        }
-        }
+    }
 
     #[cfg(not(verus_keep_ghost))]
     fn grep(mode: &str, pattern: &str, path: &str) -> Result<bool, String> {

@@ -6,20 +6,27 @@ use vstd::prelude::verus;
 use vstd::prelude::*;
 
 verus! {
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq)]
 pub enum CargoCommand { Report, Original, Replay, Other }
 
 /// Select the operation that owns Cargo evidence production or replay.
-pub fn cargo_command(name:&str) -> (command:CargoCommand)
-    ensures (command == CargoCommand::Report) == (name@=="collect-cargo-proof"@),
-        (command == CargoCommand::Original) == (name@=="collect-cargo-proof-original"@),
-        (command == CargoCommand::Replay) == (name@=="validate-cargo-proof-originals"@),
-        (command == CargoCommand::Other) == (name@!="collect-cargo-proof"@ && name@!="collect-cargo-proof-original"@ && name@!="validate-cargo-proof-originals"@),
+pub fn cargo_command(name: &str) -> (command: CargoCommand)
+    ensures
+        (command is Report) == (name@ == "collect-cargo-proof"@),
+        (command is Original) == (name@ == "collect-cargo-proof-original"@),
+        (command is Replay) == (name@ == "validate-cargo-proof-originals"@),
+        (command is Other) == (name@ != "collect-cargo-proof"@
+            && name@ != "collect-cargo-proof-original"@ && name@ != "validate-cargo-proof-originals"@),
 {
-   if <&str>::exec_eq(name,"collect-cargo-proof") {CargoCommand::Report}
-   else if <&str>::exec_eq(name,"collect-cargo-proof-original"){CargoCommand::Original}
-   else if <&str>::exec_eq(name,"validate-cargo-proof-originals"){CargoCommand::Replay}
-   else {CargoCommand::Other}
+    proof {
+        reveal_strlit("collect-cargo-proof");
+        reveal_strlit("collect-cargo-proof-original");
+        reveal_strlit("validate-cargo-proof-originals");
+    }
+    if <&str>::exec_eq(name, "collect-cargo-proof") { CargoCommand::Report }
+    else if <&str>::exec_eq(name, "collect-cargo-proof-original") { CargoCommand::Original }
+    else if <&str>::exec_eq(name, "validate-cargo-proof-originals") { CargoCommand::Replay }
+    else { CargoCommand::Other }
 }
 }
 #[cfg(not(verus_keep_ghost))]
@@ -377,55 +384,54 @@ fn logged(root: &Path, operation: &str) -> Result<u8, String> {
 #[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    if let [command, rest @ ..] = arguments.as_slice()
-        && command == "native-scratch"
-    {
-        let result = (|| -> std::io::Result<u8> {
-            let root = std::env::current_dir()?.canonicalize()?;
-            let git = std::ffi::OsStr::new("git");
-            match rest {
-                [action, program, args @ ..] if action == "run" => {
-                    chrono_host_bootstrap::native_scratch::run(&root, program, args, git)
+    match arguments.as_slice() {
+        [command, rest @ ..] if command == "native-scratch" => {
+            let result = (|| -> std::io::Result<u8> {
+                let root = std::env::current_dir()?.canonicalize()?;
+                let git = std::ffi::OsStr::new("git");
+                match rest {
+                    [action, program, args @ ..] if action == "run" => {
+                        chrono_host_bootstrap::native_scratch::run(&root, program, args, git)
+                    }
+                    [action, seconds] if action == "maintain" => {
+                        let seconds = seconds
+                            .to_str()
+                            .and_then(|v| v.parse().ok())
+                            .ok_or_else(|| std::io::Error::other("invalid retention seconds"))?;
+                        let removed =
+                            chrono_host_bootstrap::native_scratch::maintain(&root, seconds, git)?;
+                        println!("native check directories removed: {removed}");
+                        Ok(0)
+                    }
+                    _ => Err(std::io::Error::other(
+                        "usage: native-scratch run PROGRAM [ARG ...] | maintain SECONDS",
+                    )),
                 }
-                [action, seconds] if action == "maintain" => {
-                    let seconds = seconds
-                        .to_str()
-                        .and_then(|v| v.parse().ok())
-                        .ok_or_else(|| std::io::Error::other("invalid retention seconds"))?;
-                    let removed =
-                        chrono_host_bootstrap::native_scratch::maintain(&root, seconds, git)?;
-                    println!("native check directories removed: {removed}");
-                    Ok(0)
+            })();
+            return match result {
+                Ok(code) => code.into(),
+                Err(error) => {
+                    eprintln!("native scratch: {error}");
+                    2.into()
                 }
-                _ => Err(std::io::Error::other(
-                    "usage: native-scratch run PROGRAM [ARG ...] | maintain SECONDS",
-                )),
-            }
-        })();
-        return match result {
-            Ok(code) => code.into(),
-            Err(error) => {
-                eprintln!("native scratch: {error}");
-                2.into()
-            }
-        };
-    }
-    if let [command, selection] = arguments.as_slice()
-        && command == "ci-install-table-v1"
-    {
-        let check_storage_and_links = match selection.to_str() {
-            Some("manager") => false,
-            Some("manager-storage-links") => true,
-            _ => {
-                eprintln!("expected manager or manager-storage-links");
-                return ExitCode::from(2);
-            }
-        };
-        print!(
-            "{}",
-            chrono_host_bootstrap::template::ci_install_table(check_storage_and_links)
-        );
-        return ExitCode::SUCCESS;
+            };
+        }
+        [command, selection] if command == "ci-install-table-v1" => {
+            let check_storage_and_links = match selection.to_str() {
+                Some("manager") => false,
+                Some("manager-storage-links") => true,
+                _ => {
+                    eprintln!("expected manager or manager-storage-links");
+                    return ExitCode::from(2);
+                }
+            };
+            print!(
+                "{}",
+                chrono_host_bootstrap::template::ci_install_table(check_storage_and_links)
+            );
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
     if matches!(arguments.as_slice(), [arg] if arg == "prepare-template") {
         return match chrono_host_bootstrap::template::run() {
