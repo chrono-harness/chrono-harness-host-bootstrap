@@ -65,8 +65,8 @@ prove verify.bootstrap-bindings-tests "$tests/verified_bindings.rs"
 prove verify.bootstrap-cargo-tests "$tests/verified_cargo.rs"
 
 included="$tests/../../host-bootstrap/src"
-collect verify.bootstrap-bindings "$src/verified_bindings.rs" "${binding_modules[@]/#/$src/}"
-collect verify.bootstrap-bindings-tests "$tests/verified_bindings.rs" "$included/verified_bindings.rs" \
+collect verify.bootstrap-bindings "$src/verified_bindings.rs" "$src/main.rs" "${binding_modules[@]/#/$src/}"
+collect verify.bootstrap-bindings-tests "$tests/verified_bindings.rs" "$included/verified_bindings.rs" "$included/main.rs" \
   "${binding_modules[@]/#/$included/}" "$tests/support/expect.rs" \
   "$tests/proof_support/host-bootstrap/construction.rs" "$tests/proof_support/host-bootstrap/owner.rs" \
   "$tests/proof_support/host-bootstrap/original.rs" "$tests/bindings.rs"
