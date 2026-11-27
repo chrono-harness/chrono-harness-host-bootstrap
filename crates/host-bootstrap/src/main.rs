@@ -1,12 +1,39 @@
 //! 本宿主原生 bootstrap 入口；原操作、两流和所有者阶段均由实际生产者发布。
+use vstd::contrib::exec_spec::ExecSpecEq;
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+#[derive(PartialEq,Eq)]
+pub enum CargoCommand { Report, Original, Replay, Other }
+
+/// Select the operation that owns Cargo evidence production or replay.
+pub fn cargo_command(name:&str) -> (command:CargoCommand)
+    ensures (command == CargoCommand::Report) == (name@=="collect-cargo-proof"@),
+        (command == CargoCommand::Original) == (name@=="collect-cargo-proof-original"@),
+        (command == CargoCommand::Replay) == (name@=="validate-cargo-proof-originals"@),
+        (command == CargoCommand::Other) == (name@!="collect-cargo-proof"@ && name@!="collect-cargo-proof-original"@ && name@!="validate-cargo-proof-originals"@),
+{
+   if <&str>::exec_eq(name,"collect-cargo-proof") {CargoCommand::Report}
+   else if <&str>::exec_eq(name,"collect-cargo-proof-original"){CargoCommand::Original}
+   else if <&str>::exec_eq(name,"validate-cargo-proof-originals"){CargoCommand::Replay}
+   else {CargoCommand::Other}
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
     download, lifecycle, owner, profile, proved_build, shared,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json;
+#[cfg(not(verus_keep_ghost))]
 use std::{io::Write, path::Path, process::ExitCode};
 
+#[cfg(not(verus_keep_ghost))]
 fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFailure> {
     let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
     let environment = std::env::vars_os().collect();
@@ -77,6 +104,7 @@ fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFail
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn run() -> Result<(), BuildFailure> {
     let arguments: Vec<String> = std::env::args_os()
         .skip(1)
@@ -130,7 +158,11 @@ fn run() -> Result<(), BuildFailure> {
             commit,
             manifest,
             sources @ ..,
-        ] if command == "collect-cargo-proof" || command == "collect-cargo-proof-original" => {
+        ] if matches!(
+            cargo_command(command),
+            CargoCommand::Report | CargoCommand::Original
+        ) =>
+        {
             let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
             let contract = chrono_host_bootstrap::compiler::OutputContract {
                 version: version.clone(),
@@ -140,7 +172,7 @@ fn run() -> Result<(), BuildFailure> {
                 &root, directory, operation, tool, workspace,
             )
             .and_then(|build| {
-                if command == "collect-cargo-proof-original" {
+                if cargo_command(command) == CargoCommand::Original {
                     build.collect_original(package, &contract, manifest, sources)
                 } else {
                     build.collect(package, &contract, manifest, sources)
@@ -152,7 +184,7 @@ fn run() -> Result<(), BuildFailure> {
                 .write_all(report.as_bytes())
                 .map_err(|e| BuildFailure::from(e.to_string()))
         }
-        [command] if command == "validate-cargo-proof-originals" => {
+        [command] if cargo_command(command) == CargoCommand::Replay => {
             let archive: chrono_host_bootstrap::cargo_proofs::Replay =
                 serde_json::from_reader(std::io::stdin().lock())
                     .map_err(|e| BuildFailure::from(e.to_string()))?;
@@ -272,6 +304,7 @@ fn run() -> Result<(), BuildFailure> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn finish(result: Result<(), BuildFailure>) -> u8 {
     match result {
         Ok(()) => 0,
@@ -285,6 +318,7 @@ fn finish(result: Result<(), BuildFailure>) -> u8 {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn logged(root: &Path, operation: &str) -> Result<u8, String> {
     use std::{
         io::{BufRead, BufReader, Write},
@@ -340,6 +374,7 @@ fn logged(root: &Path, operation: &str) -> Result<u8, String> {
     }
     Ok(wanted)
 }
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
     if let [command, rest @ ..] = arguments.as_slice()

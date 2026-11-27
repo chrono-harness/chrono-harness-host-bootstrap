@@ -37,6 +37,9 @@ pub mod profile;
 pub mod environment;
 
 #[cfg(verus_keep_ghost)]
+#[path = "main.rs"]
+pub mod cargo_commands;
+#[cfg(verus_keep_ghost)]
 #[path = "cargo_proofs.rs"]
 pub mod cargo_proofs;
 #[cfg(verus_keep_ghost)]

@@ -33,20 +33,29 @@ mod release_observation {
     use vstd::prelude::*;
 
     verus! {
-    pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.2"@,
-    { "chrono-host-bootstrap 0.1.2" }
-
-    pub fn diagnostic() -> (value: &'static str)
-        ensures value@ == "unknown native bootstrap command or arguments"@,
-    { "unknown native bootstrap command or arguments" }
-
-    pub fn accepts(exit: i32, version_ok: bool, error_matches: bool) -> (accepted: bool)
-        ensures accepted == (exit == 1 && version_ok && error_matches),
-    {
-        exit == 1 && version_ok && error_matches
+    #[cfg(verus_keep_ghost)]
+    fn cargo_root_collection_and_replay_have_distinct_entry_points() {
+        use policy::cargo_commands::{cargo_command,CargoCommand};
+        assert(cargo_command("collect-cargo-proof") == CargoCommand::Report);
+        assert(cargo_command("collect-cargo-proof-original") == CargoCommand::Original);
+        assert(cargo_command("validate-cargo-proof-originals") == CargoCommand::Replay);
+        assert(cargo_command("collect") == CargoCommand::Other);
     }
-    }
+
+        pub fn version_text() -> (value: &'static str)
+            ensures value@ == "chrono-host-bootstrap 0.1.2"@,
+        { "chrono-host-bootstrap 0.1.2" }
+
+        pub fn diagnostic() -> (value: &'static str)
+            ensures value@ == "unknown native bootstrap command or arguments"@,
+        { "unknown native bootstrap command or arguments" }
+
+        pub fn accepts(exit: i32, version_ok: bool, error_matches: bool) -> (accepted: bool)
+            ensures accepted == (exit == 1 && version_ok && error_matches),
+        {
+            exit == 1 && version_ok && error_matches
+        }
+        }
 
     #[cfg(not(verus_keep_ghost))]
     fn grep(mode: &str, pattern: &str, path: &str) -> Result<bool, String> {
