@@ -37,6 +37,9 @@ pub mod profile;
 pub mod environment;
 
 #[cfg(verus_keep_ghost)]
+#[path = "cargo_proofs.rs"]
+pub mod cargo_proofs;
+#[cfg(verus_keep_ghost)]
 #[path = "execution.rs"]
 pub mod execution;
 #[cfg(verus_keep_ghost)]
@@ -45,6 +48,9 @@ pub mod files;
 #[cfg(verus_keep_ghost)]
 #[path = "original.rs"]
 pub mod original;
+#[cfg(verus_keep_ghost)]
+#[path = "owner_proof.rs"]
+pub mod owner_proof;
 #[cfg(verus_keep_ghost)]
 #[path = "registered_methods.rs"]
 pub mod registered_methods;
@@ -136,17 +142,17 @@ pub fn ci_link(symlink: bool, same_target: bool) -> (action: &'static str)
     else if same_target { "keep" } else { "replace" }
 }
 
-pub open spec fn github_slug_byte(b: u8) -> bool {
+pub open spec fn ascii_component_byte(b: u8) -> bool {
     48 <= b <= 57 || 65 <= b <= 90 || 97 <= b <= 122 || b == 95 || b == 46 || b == 45
 }
 
-pub open spec fn github_slug(value: Seq<u8>) -> bool {
+pub open spec fn ascii_component(value: Seq<u8>) -> bool {
     value.len() > 0 && value != seq![46u8] && value != seq![46u8, 46u8]
-        && forall|i:int| 0 <= i < value.len() ==> github_slug_byte(value[i])
+        && forall|i:int| 0 <= i < value.len() ==> ascii_component_byte(value[i])
 }
 
-fn valid_github_slug(value: &[u8]) -> (valid: bool)
-    ensures valid == github_slug(value@),
+pub fn valid_ascii_component(value: &[u8]) -> (valid: bool)
+    ensures valid == ascii_component(value@),
 {
     if value.len() == 0 || (value.len() == 1 && value[0] == 46)
         || (value.len() == 2 && value[0] == 46 && value[1] == 46) {
@@ -155,7 +161,7 @@ fn valid_github_slug(value: &[u8]) -> (valid: bool)
     }
     let mut i = 0;
     while i < value.len()
-        invariant 0 <= i <= value.len(), forall|j:int| 0 <= j < i ==> github_slug_byte(value@[j]),
+        invariant 0 <= i <= value.len(), forall|j:int| 0 <= j < i ==> ascii_component_byte(value@[j]),
         decreases value.len() - i,
     {
         let b = value[i];
@@ -193,10 +199,10 @@ fn matches_host(host: &[u8], lower: &[u8]) -> (same: bool)
 pub fn github_repository(host: &[u8], owner: &[u8], name: &[u8]) -> (accepted: bool)
     ensures accepted == ((ascii_host_matches(host@, vstd::utf8::encode_utf8("github.com"@))
         || ascii_host_matches(host@, vstd::utf8::encode_utf8("ssh.github.com"@)))
-        && github_slug(owner@) && github_slug(name@)),
+        && ascii_component(owner@) && ascii_component(name@)),
 {
     (matches_host(host, "github.com".as_bytes()) || matches_host(host, "ssh.github.com".as_bytes()))
-        && valid_github_slug(owner) && valid_github_slug(name)
+        && valid_ascii_component(owner) && valid_ascii_component(name)
 }
 
 

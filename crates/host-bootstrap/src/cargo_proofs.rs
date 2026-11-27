@@ -1,25 +1,54 @@
 //! Bind independently collected Cargo-Verus library results to one serial build.
+#[cfg(verus_keep_ghost)]
+use super::{ascii_component, valid_ascii_component};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::valid_ascii_component;
+use vstd::prelude::*;
+
+verus! {
+/// Cargo creates a proof operation under the caller's canonical host directory.
+pub fn operation_directory(inside_host: bool, operation: &[u8]) -> (accepted: bool)
+    ensures accepted == (inside_host && ascii_component(operation@)),
+{
+    inside_host && valid_ascii_component(operation)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::bindings::Environment;
+#[cfg(not(verus_keep_ghost))]
 use crate::compiler::{OutputContract, proof_rows};
+#[cfg(not(verus_keep_ghost))]
 use crate::execution::{self, Method, Operation};
+#[cfg(not(verus_keep_ghost))]
 use crate::files::{checked_path, file_identity, resolve_program};
+#[cfg(not(verus_keep_ghost))]
 use crate::original::operation_record_matches;
+#[cfg(not(verus_keep_ghost))]
 use crate::proved_build::{SourcePaths, bind_dependency, bounded, persist};
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_cargo::{self as cargo, Artifact, Cargo, SerialEvent, SerialProofs};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::value::RawValue;
+#[cfg(not(verus_keep_ghost))]
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs, io,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 type Identity = (String, u64);
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 struct Metadata {
     packages: Vec<Package>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 struct Package {
     id: String,
@@ -28,6 +57,7 @@ struct Package {
     targets: Vec<crate::verified_cargo::Target>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct Library {
     package: String,
@@ -38,6 +68,7 @@ struct Library {
     source: PathBuf,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Receipt {
@@ -47,17 +78,20 @@ struct Receipt {
     files: BTreeMap<PathBuf, Identity>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Original<'a> {
     artifact: Artifact,
     proof: &'a str,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn io_error(error: io::Error) -> String {
     error.to_string()
 }
 
 /// Cargo supplies the package ID and target. With --jobs 1 the verifier's raw
 /// object precedes its own library artifact. No work is launched by the reader.
+#[cfg(not(verus_keep_ghost))]
 fn collect_records<'a>(
     mut bytes: &'a [u8],
     libraries: &BTreeMap<String, Library>,
@@ -164,6 +198,7 @@ fn collect_records<'a>(
     Ok(results)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Build {
     root: PathBuf,
     directory: PathBuf,
@@ -171,6 +206,7 @@ pub struct Build {
     tool: PathBuf,
     operation: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Build {
     pub fn new(
         root: &Path,
@@ -181,13 +217,7 @@ impl Build {
     ) -> Result<Self, String> {
         let root = root.canonicalize().map_err(io_error)?;
         let directory = root.join(directory).canonicalize().map_err(io_error)?;
-        if !directory.starts_with(&root)
-            || operation.is_empty()
-            || matches!(operation, "." | "..")
-            || !operation
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
-        {
+        if !operation_directory(directory.starts_with(&root), operation.as_bytes()) {
             return Err("invalid Cargo proof operation directory".into());
         }
         checked_path(&root, manifest)?;
@@ -472,9 +502,11 @@ impl Build {
             self.root.to_str().ok_or("host path must be UTF-8")?,
             process.pid,
             process.exit_code,
-        ) || process.operation != self.operation
-            || process.reused_from.is_some()
-            || self.root.join(&process.stdout.path) != stdout
+        ) || !crate::owner_proof::original_for(
+            &process.operation,
+            &self.operation,
+            process.reused_from.is_some(),
+        ) || self.root.join(&process.stdout.path) != stdout
             || self.root.join(&process.stderr.path) != stderr
             || file_identity(&stderr)? != (process.stderr.sha256.clone(), process.stderr.size)
             || file_identity(&self.tool)?.0 != process.executable_sha256
