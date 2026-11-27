@@ -1,11 +1,83 @@
 //! Bind a green-template checkout to its own GitHub identity and selected products.
+#[cfg(verus_keep_ghost)]
+use super::byte_prefix;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::byte_prefix;
+use vstd::prelude::*;
+
+verus! {
+pub struct AnswerFields {
+    pub repository: bool,
+    pub branch: bool,
+}
+
+pub open spec fn starts(bytes: Seq<u8>, key: Seq<u8>) -> bool {
+    key.len() <= bytes.len() && forall|i: int| 0 <= i < key.len() ==> bytes[i] == key[i]
+}
+
+pub open spec fn ending(bytes: Seq<u8>) -> Seq<char> {
+    if bytes.len() == 0 || bytes.last() != 10 { ""@ }
+    else if bytes.len() >= 2 && bytes[bytes.len() - 2] == 13 { "\r\n"@ }
+    else { "\n"@ }
+}
+
+fn line_ending(bytes: &[u8]) -> (suffix: &'static str)
+    ensures suffix@ == ending(bytes@),
+{
+    let n = bytes.len();
+    if n == 0 || bytes[n - 1] != 10 { "" }
+    else if n >= 2 && bytes[n - 2] == 13 { "\r\n" }
+    else { "\n" }
+}
+
+impl AnswerFields {
+    pub fn complete(&self) -> (ok: bool)
+        ensures ok == (self.repository && self.branch),
+    { self.repository && self.branch }
+
+    /// Return the two fragments emitted for this physical line, or reject a repeated key.
+    pub fn line<'a>(&mut self, line: &'a str, repository: &'a str, branch: &'a str)
+        -> (fragments: Option<(&'a str, &'a str)>)
+        ensures ({
+            let bytes = vstd::utf8::encode_utf8(line@);
+            let repo = starts(bytes, vstd::utf8::encode_utf8("repository:"@));
+            let dev = !repo && starts(bytes, vstd::utf8::encode_utf8("dev_branch:"@));
+            let duplicate = (repo && old(self).repository) || (dev && old(self).branch);
+            &&& fragments.is_none() == duplicate
+            &&& self.repository == (old(self).repository || repo)
+            &&& self.branch == (old(self).branch || dev)
+            &&& match fragments {
+                Some((text, suffix)) =>
+                    text@ == (if repo { repository@ } else if dev { branch@ } else { line@ })
+                    && suffix@ == (if repo || dev { ending(bytes) } else { ""@ }),
+                None => true,
+            }
+        }),
+    {
+        let bytes = line.as_bytes();
+        if byte_prefix(bytes, "repository:".as_bytes()) {
+            if self.repository { return None; }
+            self.repository = true;
+            Some((repository, line_ending(bytes)))
+        } else if byte_prefix(bytes, "dev_branch:".as_bytes()) {
+            if self.branch { return None; }
+            self.branch = true;
+            Some((branch, line_ending(bytes)))
+        } else { Some((line, "")) }
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Map, Value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs, io,
     path::Path,
     process::{Command, Stdio},
 };
 
+#[cfg(not(verus_keep_ghost))]
 fn repository(url: &str) -> Result<&str, String> {
     let invalid = || "origin must identify a GitHub owner/repository".to_owned();
     let (authority, path) = if let Some((_, rest)) = url.split_once("://") {
@@ -29,6 +101,7 @@ fn repository(url: &str) -> Result<&str, String> {
     Ok(path)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn event_branch(path: &Path, repo: &str) -> Result<Option<String>, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let event: Value = serde_json::from_slice(&bytes).map_err(|e| format!("GitHub event: {e}"))?;
@@ -41,39 +114,34 @@ fn event_branch(path: &Path, repo: &str) -> Result<Option<String>, String> {
         .map(str::to_owned))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn update_answers(text: &str, repo: &str, branch: &str) -> Result<String, String> {
-    // Only these two scalar lines belong to setup. Preserve comments, ordering and local answers.
-    let bindings = [("repository:", repo), ("dev_branch:", branch)];
-    let mut found = [0; 2];
+    let repository = format!(
+        "repository: {}",
+        serde_json::to_string(repo).map_err(|e| e.to_string())?
+    );
+    let branch = format!(
+        "dev_branch: {}",
+        serde_json::to_string(branch).map_err(|e| e.to_string())?
+    );
+    let invalid = "expected exactly one repository and dev_branch in template-answers.yml";
+    let mut fields = AnswerFields {
+        repository: false,
+        branch: false,
+    };
     let mut result = String::with_capacity(text.len());
     for line in text.split_inclusive('\n') {
-        if let Some((i, (key, value))) = bindings
-            .iter()
-            .enumerate()
-            .find(|(_, (key, _))| line.starts_with(key))
-        {
-            found[i] += 1;
-            result.push_str(key);
-            result.push(' ');
-            result.push_str(&serde_json::to_string(value).map_err(|e| e.to_string())?);
-            if line.ends_with("\r\n") {
-                result.push('\r');
-            }
-            if line.ends_with('\n') {
-                result.push('\n');
-            }
-        } else {
-            result.push_str(line);
-        }
+        let (text, suffix) = fields.line(line, &repository, &branch).ok_or(invalid)?;
+        result.push_str(text);
+        result.push_str(suffix);
     }
-    if found != [1, 1] {
-        return Err(
-            "expected exactly one repository and dev_branch in template-answers.yml".into(),
-        );
+    if !fields.complete() {
+        return Err(invalid.into());
     }
     Ok(result)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, String> {
     match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
@@ -82,6 +150,7 @@ fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, String> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write_changed(path: &Path, previous: Option<&[u8]>, next: Option<&[u8]>) -> Result<(), String> {
     if previous == next {
         return Ok(());
@@ -92,6 +161,7 @@ fn write_changed(path: &Path, previous: Option<&[u8]>, next: Option<&[u8]>) -> R
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn prepare(
     root: &Path,
     event: Option<&Path>,
@@ -166,6 +236,7 @@ pub fn prepare(
     Ok(format!("Configured {repo} on {branch}"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn run() -> Result<String, String> {
     let event = (std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true"))
         .then(|| std::env::var_os("GITHUB_EVENT_PATH"))
@@ -193,6 +264,7 @@ pub fn run() -> Result<String, String> {
 
 /// Produce the finite POSIX dispatch table for a fresh checkout. The selector only
 /// matches an observed key. Unknown keys fail before a download or link update.
+#[cfg(not(verus_keep_ghost))]
 pub fn ci_install_table(check_storage_and_links: bool) -> String {
     use crate::verified_bindings::{
         ci_link, ci_manager, ci_mise_asset, ci_mise_digest, ci_storage,
