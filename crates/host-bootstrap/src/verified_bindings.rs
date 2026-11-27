@@ -16,6 +16,18 @@ pub mod compiler;
 #[path = "bindings.rs"]
 pub mod bindings;
 
+#[cfg(verus_keep_ghost)]
+#[path = "codec.rs"]
+pub mod codec;
+
+#[cfg(verus_keep_ghost)]
+#[path = "descriptors.rs"]
+pub mod descriptors;
+
+#[cfg(verus_keep_ghost)]
+#[path = "retention.rs"]
+pub mod retention;
+
 #[path = "native_policy.rs"]
 pub mod native_policy;
 pub use native_policy::process_exit;

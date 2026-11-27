@@ -62,8 +62,8 @@ mod release_observation {
 
     verus! {
     pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.8"@,
-    { "chrono-host-bootstrap 0.1.8" }
+        ensures value@ == "chrono-host-bootstrap 0.1.9"@,
+    { "chrono-host-bootstrap 0.1.9" }
 
     pub fn diagnostic() -> (value: &'static str)
         ensures value@ == "unknown native bootstrap command or arguments"@,
@@ -1226,5 +1226,28 @@ fn native_platform_preserves_the_report_consumer_machine_name() {
     expect(policy::artifact_identity::equal_text(linux.1, "aarch64"));
     expect(policy::artifact_identity::equal_text(
         native_platform_names("freebsd", "x86_64").unwrap_err(), "freebsd"));
+}
+}
+
+#[cfg(verus_keep_ghost)]
+verus! {
+fn checkout_rejects_incomplete_replies_and_preserves_owned_carriers() {
+    use policy::{descriptors::needs_carrier, retention::complete_reply};
+    expect(!complete_reply(&[]));
+    expect(!complete_reply(&[123u8,125u8]));
+    expect(complete_reply(&[123u8,125u8,10u8]));
+    expect(!needs_carrier(false, 0));
+    expect(needs_carrier(true, 0));
+    expect(needs_carrier(false, 1));
+    expect(needs_carrier(true, 3));
+}
+
+fn duplicate_message_retains_its_decoded_member_and_location(key: &str, at: &str) {
+    use policy::codec::{duplicate_member, DUPLICATE_HEADER};
+    let found = duplicate_member(Some(DUPLICATE_HEADER), Some(key), Some(at));
+    assert(found == Some((key, at)));
+    expect(duplicate_member(None, Some(key), Some(at)).is_none());
+    expect(duplicate_member(Some(DUPLICATE_HEADER), None, Some(at)).is_none());
+    expect(duplicate_member(Some(DUPLICATE_HEADER), Some(key), None).is_none());
 }
 }
