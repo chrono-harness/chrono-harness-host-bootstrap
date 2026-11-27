@@ -29,6 +29,10 @@ pub mod codec;
 pub mod descriptors;
 
 #[cfg(verus_keep_ghost)]
+#[path = "shared.rs"]
+pub mod shared;
+
+#[cfg(verus_keep_ghost)]
 #[path = "retention.rs"]
 pub mod retention;
 

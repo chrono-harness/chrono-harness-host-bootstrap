@@ -35,6 +35,32 @@ mod bindings_boundaries;
 
 #[cfg(verus_keep_ghost)]
 verus! {
+#[cfg(verus_keep_ghost)]
+fn preserve_read_failure_and_original_bytes<E>(err: E, stored: &[u8], wanted: &[u8]) {
+    let failure = policy::shared::original_matches(Err(err), wanted);
+    let missing = policy::shared::original_matches::<E>(Ok(None), wanted);
+    let observed = policy::shared::original_matches::<E>(Ok(Some(stored)), wanted);
+    assert(match failure { Err(v) => v == err, _ => false });
+    assert(match missing { Ok(v) => v, _ => false });
+    assert(match observed { Ok(v) => v == (stored@ == wanted@), _ => false });
+}
+
+#[cfg(verus_keep_ghost)]
+fn transfer_cache_overlap_rejects_any_descendant(path: &[u8])
+    requires policy::shared::overlaps(path@, vstd::utf8::encode_utf8(".chrono-harness/cache"@))
+{
+    let valid = policy::shared::isolated_transfer(path);
+    assert(!valid);
+}
+
+#[cfg(verus_keep_ghost)]
+fn selection_requires_all_registered_profiles(selected: &Vec<String>, declared: &Vec<String>) {
+    let valid = policy::shared::declared_profiles(selected, declared);
+    assert(valid ==> selected.len() > 0);
+    assert(valid ==> forall|i: int| 0 <= i < selected.len()
+        ==> policy::name_member(declared@, (#[trigger] selected@[i])@));
+}
+
 
     fn cargo_root_collection_and_replay_have_distinct_entry_points() {
         use policy::cargo_commands::cargo_command;
