@@ -65,10 +65,6 @@ mod release_observation {
     use vstd::prelude::*;
 
     verus! {
-    pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.9"@,
-    { "chrono-host-bootstrap 0.1.9" }
-
     pub fn diagnostic() -> (value: &'static str)
         ensures value@ == "unknown native bootstrap command or arguments"@,
     { "unknown native bootstrap command or arguments" }
@@ -93,11 +89,13 @@ mod release_observation {
     #[cfg(not(verus_keep_ghost))]
     pub(super) fn evaluate_observations() -> Result<(), String> {
         let arguments: Vec<_> = std::env::args().skip(1).collect();
-        let [exit, version, error_file] = arguments.as_slice() else {
-            return Err("usage: release_observation EXIT VERSION ERROR_FILE".into());
+        let [exit, version, expected_version, error_file] = arguments.as_slice() else {
+            return Err(
+                "usage: release_observation EXIT VERSION EXPECTED_VERSION ERROR_FILE".into(),
+            );
         };
         let exit = exit.parse::<i32>().map_err(|e| e.to_string())?;
-        let version_ok = version == version_text();
+        let version_ok = super::policy::artifact_identity::equal_text(version, expected_version);
         let error_matches = grep("-F", diagnostic(), error_file)?;
         let admitted = accepts(exit, version_ok, error_matches);
         if admitted {
