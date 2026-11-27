@@ -834,14 +834,14 @@ fn template_repository_checks_observed_ascii_owner_and_name_before_writing() {
     let dotdot = [46u8,46];
     let outside = [255u8];
     proof {
-        assert forall|i:int| 0 <= i < path.len() implies policy::github_slug_byte(path@[i]) by {
+        assert forall|i:int| 0 <= i < path.len() implies policy::ascii_component_byte(path@[i]) by {
             assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4);
         }
-        assert(policy::github_slug(path@));
-        assert(policy::github_slug(name@));
+        assert(policy::ascii_component(path@));
+        assert(policy::ascii_component(name@));
         assert(dot@ =~= seq![46u8]);
         assert(dotdot@ =~= seq![46u8,46u8]);
-        assert(!policy::github_slug_byte(outside@[0]));
+        assert(!policy::ascii_component_byte(outside@[0]));
     }
     expect(policy::github_repository(host,&path,&name));
     expect(policy::github_repository(ssh,&name,&path));
@@ -849,7 +849,7 @@ fn template_repository_checks_observed_ascii_owner_and_name_before_writing() {
     expect(!policy::github_repository(host,&dot,&name));
     expect(!policy::github_repository(host,&name,&dotdot));
     path[3] = 47;
-    assert(!policy::github_slug_byte(path@[3]));
+    assert(!policy::ascii_component_byte(path@[3]));
     expect(!policy::github_repository(host,&path,&name));
     expect(!policy::github_repository(host,&name,&outside));
     proof {
@@ -1134,4 +1134,36 @@ fn local_answers_and_line_endings_survive_green_template_setup() {
         "dev_branch: old",
         "repository: \"owner/project\"",
     );
+}
+
+#[cfg(verus_keep_ghost)]
+use self::policy::{cargo_proofs::operation_directory, owner_proof::original_for};
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::{cargo_proofs::operation_directory, owner_proof::original_for};
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_proofs_require_a_named_host_directory_and_own_process() {
+    let name = [65u8, 46, 95, 45, 57];
+    proof {
+        assert forall|i:int| 0 <= i < 5 implies policy::ascii_component_byte(name@[i]) by {
+            assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4);
+        }
+        reveal_strlit("proof"); reveal_strlit("another");
+        assert("proof"@.len() != "another"@.len());
+    }
+    expect(operation_directory(true, &name));
+    expect(!operation_directory(false, &name));
+    expect(!operation_directory(true, &[]));
+    let dot = [46u8];
+    let dotdot = [46u8,46];
+    proof { assert(dot@ =~= seq![46u8]); assert(dotdot@ =~= seq![46u8,46u8]); }
+    expect(!operation_directory(true, &dot));
+    expect(!operation_directory(true, &dotdot));
+    expect(!operation_directory(true, &[65u8,47,66]));
+    expect(!operation_directory(true, &[255u8]));
+    expect(original_for("proof", "proof", false));
+    expect(!original_for("proof", "proof", true));
+    expect(!original_for("another", "proof", false));
+}
 }
