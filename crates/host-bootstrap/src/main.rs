@@ -1,4 +1,5 @@
 //! 本宿主原生 bootstrap 入口；原操作、两流和所有者阶段均由实际生产者发布。
+#![allow(unexpected_cfgs)]
 use vstd::contrib::exec_spec::ExecSpecEq;
 #[cfg(not(verus_keep_ghost))]
 use vstd::prelude::verus;

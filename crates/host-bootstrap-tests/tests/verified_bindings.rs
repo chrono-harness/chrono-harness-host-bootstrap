@@ -35,7 +35,13 @@ verus! {
         let original = cargo_command("collect-cargo-proof-original");
         let replay = cargo_command("validate-cargo-proof-originals");
         let unknown = cargo_command("collect");
-        assert(report is Report && original is Original && replay is Replay && unknown is Other);
+        assert(report is Report);
+        assert(original is Original);
+        assert(replay is Replay);
+        assert("collect"@ != "collect-cargo-proof"@) by (compute);
+        assert("collect"@ != "collect-cargo-proof-original"@) by (compute);
+        assert("collect"@ != "validate-cargo-proof-originals"@) by (compute);
+        assert(unknown is Other);
     }
 }
 
