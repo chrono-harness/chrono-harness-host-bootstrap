@@ -7,9 +7,13 @@ mod policy;
 
 #[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::bindings::native_platform_names;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::download as archive_policy;
 use policy::Executable;
 #[cfg(verus_keep_ghost)]
 use policy::bindings::native_platform_names;
+#[cfg(verus_keep_ghost)]
+use policy::download as archive_policy;
 
 use vstd::prelude::*;
 #[path = "support/expect.rs"]
@@ -253,6 +257,34 @@ fn install_selects_exact_platforms_and_preserves_declared_link_behavior() {
     let create = policy::ci_link(false, false);
     assert(darwin.unwrap()@ == "macos-arm64"@ && linux.unwrap()@ == "linux-x64"@ && other.is_none());
     assert(keep@ == "keep"@ && create@ == "create"@ && replace@ == "replace"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn archive_selection_retains_errors_and_rechecks_both_digests() {
+    broadcast use vstd::array::group_array_axioms;
+    let expected = [48u8; 64];
+    let mut other = [48u8; 64];
+    other[63] = 49;
+    proof {
+        assert forall|i: int| 0 <= i < expected@.len()
+            implies policy::hash_byte(expected@[i]) by { assert(expected@[i] == 48); }
+        assert(expected@[63] != other@[63]);
+    }
+    let hit = archive_policy::cached_archive::<u8>(Ok(Some(&expected)), &expected);
+    let stale = archive_policy::cached_archive::<u8>(Ok(Some(&other)), &expected);
+    let absent = archive_policy::cached_archive::<u8>(Ok(None), &expected);
+    let unreadable = archive_policy::cached_archive::<u8>(Err(19), &expected);
+    let valid = archive_policy::check_download(&expected, &expected);
+    let invalid = archive_policy::check_download(&other, &expected);
+    expect(matches!(hit, Ok(true)) && matches!(stale, Ok(false))
+        && matches!(absent, Ok(false)) && matches!(unreadable, Err(19)));
+    expect(valid.is_ok() && invalid.is_err());
+    let https = [104u8, 116, 116, 112, 115, 58, 47, 47];
+    let http = [104u8, 116, 116, 112, 58, 47, 47];
+    let secure = archive_policy::valid_declaration(&expected, &https, &https);
+    let plain = archive_policy::valid_declaration(&expected, &http, &https);
+    let bad_sum = archive_policy::valid_declaration(&http, &https, &https);
+    expect(secure && !plain && !bad_sum);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

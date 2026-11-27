@@ -17,6 +17,10 @@ pub mod compiler;
 pub mod bindings;
 
 #[cfg(verus_keep_ghost)]
+#[path = "download.rs"]
+pub mod download;
+
+#[cfg(verus_keep_ghost)]
 #[path = "codec.rs"]
 pub mod codec;
 
