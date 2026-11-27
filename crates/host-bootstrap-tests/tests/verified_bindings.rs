@@ -29,8 +29,6 @@ mod bindings_boundaries;
 verus! {
     fn cargo_root_collection_and_replay_have_distinct_entry_points() {
         use policy::cargo_commands::cargo_command;
-        proof { reveal_strlit("collect"); reveal_strlit("collect-cargo-proof");
-            reveal_strlit("collect-cargo-proof-original"); reveal_strlit("validate-cargo-proof-originals"); }
         let report = cargo_command("collect-cargo-proof");
         let original = cargo_command("collect-cargo-proof-original");
         let replay = cargo_command("validate-cargo-proof-originals");
@@ -38,9 +36,8 @@ verus! {
         assert(report is Report);
         assert(original is Original);
         assert(replay is Replay);
-        assert("collect"@ != "collect-cargo-proof"@) by (compute);
-        assert("collect"@ != "collect-cargo-proof-original"@) by (compute);
-        assert("collect"@ != "validate-cargo-proof-originals"@) by (compute);
+        reveal_strlit("collect"); reveal_strlit("collect-cargo-proof");
+        reveal_strlit("collect-cargo-proof-original"); reveal_strlit("validate-cargo-proof-originals");
         assert(unknown is Other);
     }
 }
