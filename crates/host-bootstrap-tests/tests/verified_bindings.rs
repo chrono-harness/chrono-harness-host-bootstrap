@@ -36,9 +36,15 @@ verus! {
         assert(report is Report);
         assert(original is Original);
         assert(replay is Replay);
-        reveal_strlit("collect"); reveal_strlit("collect-cargo-proof");
+        proof {
+            reveal_strlit("collect"); reveal_strlit("collect-cargo-proof");
         reveal_strlit("collect-cargo-proof-original"); reveal_strlit("validate-cargo-proof-originals");
-        assert(unknown is Other);
+            assert("collect"@.len() == 7);
+            assert("collect-cargo-proof"@.len() != 7);
+            assert("collect-cargo-proof-original"@.len() != 7);
+            assert("validate-cargo-proof-originals"@.len() != 7);
+            assert(unknown is Other);
+        }
     }
 }
 
