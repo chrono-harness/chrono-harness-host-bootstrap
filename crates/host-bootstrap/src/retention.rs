@@ -1,5 +1,7 @@
 //! A runner session holds the actual host leases while bootstrap builds or reads originals.
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -11,19 +13,24 @@ use std::{
     process::{Child, ChildStdout, Command, Stdio},
     rc::{Rc, Weak},
 };
+#[cfg(not(verus_keep_ghost))]
 type Client = Rc<RefCell<Session>>;
+#[cfg(not(verus_keep_ghost))]
 thread_local! {static SESSIONS: RefCell<BTreeMap<PathBuf,Weak<RefCell<Session>>>> = RefCell::new(BTreeMap::new());}
+#[cfg(not(verus_keep_ghost))]
 struct Session {
     socket: UnixStream,
     output: BufReader<ChildStdout>,
     child: Child,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Session {
     fn drop(&mut self) {
         let _ = self.socket.shutdown(Shutdown::Write);
         let _ = self.child.wait();
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Session {
     fn open(root: &Path) -> Result<Client, String> {
         SESSIONS.with(|sessions| {
@@ -64,6 +71,9 @@ impl Session {
             return Err(format!(
                 "retained-artifacts-v1 ended without a response: {status}"
             ));
+        }
+        if !complete_reply(&line) {
+            return Err("retained-artifacts-v1 returned an incomplete response".into());
         }
         serde_json::from_slice::<Result<T, String>>(&line).map_err(|e| e.to_string())?
     }
@@ -122,6 +132,7 @@ impl Session {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn active_descriptors() -> Result<Vec<OwnedFd>, String> {
     SESSIONS.with(|sessions| {
         let mut fds = Vec::new();
@@ -131,25 +142,30 @@ pub(crate) fn active_descriptors() -> Result<Vec<OwnedFd>, String> {
         Ok(fds)
     })
 }
+#[cfg(not(verus_keep_ghost))]
 pub struct Scope {
     client: Client,
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn scope(root: &Path) -> Result<Scope, String> {
     Ok(Scope {
         client: Session::open(root)?,
     })
 }
+#[cfg(not(verus_keep_ghost))]
 fn relative<'a>(root: &Path, path: &'a Path) -> Result<&'a str, String> {
     path.strip_prefix(root)
         .ok()
         .and_then(Path::to_str)
         .ok_or_else(|| format!("invalid host-relative path: {}", path.display()))
 }
+#[cfg(not(verus_keep_ghost))]
 pub struct Publication {
     scope: Scope,
     path: String,
     open: bool,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Publication {
     fn drop(&mut self) {
         if self.open {
@@ -161,6 +177,7 @@ impl Drop for Publication {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Scope {
     pub fn create(
         &self,
@@ -225,10 +242,12 @@ impl Scope {
         Ok(None)
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub struct Read {
     client: Client,
     token: u64,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Read {
     fn drop(&mut self) {
         let _: Result<(), _> = self
@@ -237,6 +256,7 @@ impl Drop for Read {
             .publication(json!({"kind":"release-read","token":self.token}));
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn enroll(
     root: &Path,
     producer: &str,
@@ -255,6 +275,7 @@ pub fn enroll(
         open: adopted,
     }))
 }
+#[cfg(not(verus_keep_ghost))]
 impl Publication {
     fn name<'a>(&self, path: &'a Path) -> Result<&'a str, String> {
         let parent = path.parent().ok_or("missing publication parent")?;
@@ -303,4 +324,17 @@ impl Publication {
             .borrow_mut()
             .publication(json!({"kind":"complete","path":self.path,"outcome":outcome}))
     }
+}
+
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn complete_reply(line: &[u8]) -> (complete: bool)
+    ensures complete == (line@.len() > 0 && line@[line@.len() - 1] == 10u8),
+{
+    line.len() > 0 && line[line.len()-1] == 10
+}
 }

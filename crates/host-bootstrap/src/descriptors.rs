@@ -1,7 +1,10 @@
 //! Process capabilities use the runner's existing Unix descriptor carrier at the exec boundary.
+#[cfg(not(verus_keep_ghost))]
 use std::{ffi::OsStr, path::Path, process::Command};
+#[cfg(not(verus_keep_ghost))]
 pub const ENV: &str = "CHRONO_PROCESS_FDS";
 
+#[cfg(not(verus_keep_ghost))]
 pub fn available() -> Result<bool, String> {
     let out = Command::new("chrono-harness")
         .arg("inherited-descriptors-v1")
@@ -16,6 +19,7 @@ pub fn available() -> Result<bool, String> {
 }
 
 /// The helper replaces itself with the actual target, preserving the operation PID and native streams.
+#[cfg(not(verus_keep_ghost))]
 pub fn command(
     root: &Path,
     program: &Path,
@@ -24,7 +28,7 @@ pub fn command(
 ) -> Result<Command, String> {
     let inherited = std::env::var_os(ENV);
     let leases = crate::retention::active_descriptors()?;
-    let mut cmd = if inherited.is_some() || !leases.is_empty() {
+    let mut cmd = if needs_carrier(inherited.is_some(), leases.len()) {
         let current_path = std::env::var_os("PATH").ok_or("PATH is missing")?;
         let search = current_path.to_str().ok_or("non UTF-8 PATH")?;
         let runtime = crate::files::resolve_program(root, "chrono-harness", Some(search))?;
@@ -68,4 +72,15 @@ pub fn command(
         }
     }
     Ok(cmd)
+}
+
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn needs_carrier(inherited: bool, leases: usize) -> (wrap: bool)
+    ensures wrap == (inherited || leases > 0),
+{ inherited || leases > 0 }
 }
