@@ -130,7 +130,7 @@ fn run() -> Result<(), BuildFailure> {
             commit,
             manifest,
             sources @ ..,
-        ] if command == "collect-cargo-proof" => {
+        ] if command == "collect-cargo-proof" || command == "collect-cargo-proof-original" => {
             let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
             let contract = chrono_host_bootstrap::compiler::OutputContract {
                 version: version.clone(),
@@ -139,11 +139,27 @@ fn run() -> Result<(), BuildFailure> {
             let report = chrono_host_bootstrap::cargo_proofs::Build::new(
                 &root, directory, operation, tool, workspace,
             )
-            .and_then(|build| build.collect(package, &contract, manifest, sources))
+            .and_then(|build| {
+                if command == "collect-cargo-proof-original" {
+                    build.collect_original(package, &contract, manifest, sources)
+                } else {
+                    build.collect(package, &contract, manifest, sources)
+                }
+            })
             .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))?;
             std::io::stdout()
                 .lock()
                 .write_all(report.as_bytes())
+                .map_err(|e| BuildFailure::from(e.to_string()))
+        }
+        [command] if command == "validate-cargo-proof-originals" => {
+            let archive: chrono_host_bootstrap::cargo_proofs::Replay =
+                serde_json::from_reader(std::io::stdin().lock())
+                    .map_err(|e| BuildFailure::from(e.to_string()))?;
+            let roots = archive
+                .validate(chrono_host_bootstrap::compiler::proof_rows)
+                .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))?;
+            serde_json::to_writer(std::io::stdout().lock(), &roots)
                 .map_err(|e| BuildFailure::from(e.to_string()))
         }
         [command, directory, operation, verifier, source] if command == "run-compiler-proof" => {

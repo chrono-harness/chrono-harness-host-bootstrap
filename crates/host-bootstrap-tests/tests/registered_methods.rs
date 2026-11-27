@@ -313,3 +313,21 @@ fn compiler_sources_require_a_mode_and_a_matching_native_original() {
     expect(matches!(cargo::native_header(Less, Some((true, Greater))), NativeHeader::Reject));
 }
 }
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn an_unbound_cargo_stream_never_reaches_the_verifier() {
+    use chrono_host_bootstrap::{cargo_proofs::Replay, files::sha256};
+    use serde_json::json;
+    let target = json!({"package":"p","package_id":"p","kind":"example","target":"business","manifest":"/h/Cargo.toml","source":"/h/src.rs"});
+    let stream = json!({"path":"target/operation/0.stdout","size":1,"sha256":sha256(b"x")});
+    let receipt = json!({"packages":["p"],"process":{"operation":"proofs","tool":"cargo-verus","argv":[],"cwd":"/h","executable_sha256":"a","pid":1,"exit_code":0,
+        "stdout":stream,"stderr":stream,"duration_seconds":0.1},"inventory":{"p/business":target},"files":{}});
+    let original = json!({"schema":"chrono-cargo-verus-root/v1","workspace":"Cargo.toml","target":target,"artifact":{"path":"file","sha256":"a","length":1},
+        "dep_info":{"path":"input.d","original":"x"},"report_sha256":sha256(b"{}")});
+    let value = json!({"receipt":receipt,"stdout":"y","contract":{"version":"v","commit":"c"},"roots":[{"path":"src.rs","original":original,"sources":{"src.rs":[sha256(b"s"),1]}}]});
+    let archive: Replay = serde_json::from_value(value).unwrap();
+    let result =
+        archive.validate(|_, _| panic!("a changed stdout must be rejected before proof admission"));
+    assert_eq!(result.unwrap_err(), "Cargo archive original stream differs");
+}

@@ -50,6 +50,8 @@ chrono-host-bootstrap run-cargo-proofs "$scratch" verify-packages "$cargo_verus"
 chrono-host-bootstrap collect-cargo-proof "$scratch" verify-packages "$cargo_verus" crates/proofs/Cargo.toml verifier "$version" "$commit" crates/proofs/verifier/Cargo.toml crates/proofs/verifier/src/lib.rs
 ```
 
+需要按文件登记并在 scratch 回收后复核的宿主，收取该根时使用相同参数的 `collect-cargo-proof-original`。它在标准输出发布当前 Cargo 回执引用、目标、库身份、原 dep-info 和该根 Verus 报告的 SHA-256。宿主按引用保留同一次编译的回执和原 stdout，多个根共享一份。用 `validate-cargo-proof-originals` 从标准输入提交回执、原 stdout、版本、commit 以及每根固定候选源的长度与 SHA-256。程序核原编译命令和串行 Cargo 目标，逐根核对整根报告与编译输入，成功输出根路径到原报告 SHA-256 的映射；来源不符时非零退出。
+
 从宿主根目录调用。传入已存在的本次临时目录、Verus 分发中的 `cargo-verus` 以及 workspace 根 manifest。执行器用 Cargo metadata 获取所选包的目标，用该 workspace 的锁文件在新 target 目录串行编译。宿主为每个必需的根收取一次结果，需要绑定的其他源可接在根路径后。收取成功返回该根的原始 Verus JSON。调用、根、原始流、库、验证元数据或编译器记录的输入与本轮不符时，命令以退出码 1 报告 `E_VERUS_COVERAGE`。
 
 `.d` 给出 rustc 记录的源和二进制依赖及其校验值。`.rmeta`、`.vir` 和 `.rlib` 均核对产生时的内容。库目标的 `.rlib` 在本步骤是构建产物；最终程序是否链接它需要在最终链接步骤查验。原始 stdout、stderr、收据与 Cargo target 均在调用者的临时目录中，收取结束后随该次工作清理。
