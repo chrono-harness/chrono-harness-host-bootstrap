@@ -1,15 +1,47 @@
 //! 当前候选的 Git 观察；不执行历史程序，观察失败保留错误及已取得的字段。
+#[cfg(verus_keep_ghost)]
+use super::artifact_identity;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::artifact_identity;
+use vstd::prelude::*;
+
+verus! {
+/// Select the blob from Git's parsed ls-tree record for this declared path.
+pub fn regular_blob<'a>(fields: &[&'a str], name: &str, declared: &str) -> (blob: Option<&'a str>)
+    ensures
+        blob.is_some() == (fields@.len() == 3
+            && (fields@[0]@ == "100644"@ || fields@[0]@ == "100755"@)
+            && fields@[1]@ == "blob"@ && name@ == declared@
+            && artifact_identity::oid(vstd::utf8::encode_utf8(fields@[2]@))),
+        blob.is_some() ==> blob.unwrap() == fields@[2],
+{
+    if fields.len() == 3 &&
+        (artifact_identity::equal_text(fields[0], "100644") || artifact_identity::equal_text(fields[0], "100755"))
+        && artifact_identity::equal_text(fields[1], "blob")
+        && artifact_identity::equal_text(name, declared)
+        && artifact_identity::valid_oid(fields[2].as_bytes())
+    {
+        Some(fields[2])
+    } else { None }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::bindings::{self, Environment};
+#[cfg(not(verus_keep_ghost))]
 use crate::files::resolve_program;
+#[cfg(not(verus_keep_ghost))]
 pub use crate::verified_bindings::{
     SourceIdentity, SourceObservation, SourceState, source_identity,
 };
+#[cfg(not(verus_keep_ghost))]
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
 
 /// 候选 Git 只读取明确固定的提交数据；不执行 producer 的程序，也不读漂移 HEAD。
+#[cfg(not(verus_keep_ghost))]
 pub struct Committed<'a> {
     root: &'a Path,
     environment: &'a Environment,
@@ -18,6 +50,7 @@ pub struct Committed<'a> {
     tree: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl<'a> Committed<'a> {
     pub fn new(
         root: &'a Path,
@@ -97,20 +130,13 @@ impl<'a> Committed<'a> {
             .split_once('\t')
             .ok_or("invalid immutable producer file record")?;
         let fields: Vec<_> = metadata.split_ascii_whitespace().collect();
-        if fields.len() != 3
-            || !matches!(fields[0], "100644" | "100755")
-            || fields[1] != "blob"
-            || name != declared
-            || !crate::verified_bindings::artifact_identity::valid_oid(fields[2].as_bytes())
-        {
-            return Err(format!(
-                "immutable producer input is not a regular file: {declared}"
-            ));
-        }
-        self.query(&["cat-file", "blob", fields[2]])
+        let blob = regular_blob(&fields, name, declared)
+            .ok_or_else(|| format!("immutable producer input is not a regular file: {declared}"))?;
+        self.query(&["cat-file", "blob", blob])
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn observe(root: &Path, environment: &Environment) -> SourceObservation {
     let mut observation = SourceObservation {
         commit: None,

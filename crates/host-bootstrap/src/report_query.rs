@@ -1,4 +1,28 @@
 //! Read the producer's original build evidence for release consumers.
+#[cfg(verus_keep_ghost)]
+use super::artifact_identity;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::artifact_identity;
+use vstd::prelude::*;
+
+verus! {
+/// An externally requested revision requires both observed Git identities.
+pub fn revision_matches(commit: Option<&str>, tree: Option<&str>, requested_commit: &str,
+    requested_tree: &str) -> (matched: bool)
+    ensures matched == match (commit, tree) {
+        (Some(c), Some(t)) => c@ == requested_commit@ && t@ == requested_tree@,
+        _ => false,
+    },
+{
+    match (commit, tree) {
+        (Some(c), Some(t)) => artifact_identity::equal_text(c, requested_commit)
+            && artifact_identity::equal_text(t, requested_tree),
+        _ => false,
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Environment, NativePlatform, native_platform},
     construction::Report,
@@ -6,14 +30,18 @@ use crate::{
     profile,
     source::{self, Committed, SourceObservation},
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Revision {
@@ -21,6 +49,7 @@ struct Revision {
     tree: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
 enum Query {
@@ -42,6 +71,7 @@ enum Query {
     Platform {},
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn streams(report: &Report) -> Vec<Value> {
     report
         .operations
@@ -50,6 +80,7 @@ fn streams(report: &Report) -> Vec<Value> {
         .collect()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn summary(producer: &Producer, report: &Report) -> Value {
     json!({
         "destinations":producer.profile.install.iter().map(|item| &item.destination).collect::<Vec<_>>(),
@@ -58,6 +89,7 @@ fn summary(producer: &Producer, report: &Report) -> Value {
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn read(root: &Path, environment: &Environment, input: impl Read) -> Result<Value, String> {
     let query: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     match query {
@@ -91,9 +123,12 @@ pub fn read(root: &Path, environment: &Environment, input: impl Read) -> Result<
             directory,
         } => {
             let producer = if let Some(revision) = revision {
-                if source.commit.as_deref() != Some(revision.commit.as_str())
-                    || source.tree.as_deref() != Some(revision.tree.as_str())
-                {
+                if !revision_matches(
+                    source.commit.as_deref(),
+                    source.tree.as_deref(),
+                    &revision.commit,
+                    &revision.tree,
+                ) {
                     return Err(
                         "original producer source commit or tree differs from requested revision"
                             .into(),

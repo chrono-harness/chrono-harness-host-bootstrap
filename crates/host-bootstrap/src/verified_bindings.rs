@@ -48,6 +48,12 @@ pub mod original;
 #[cfg(verus_keep_ghost)]
 #[path = "registered_methods.rs"]
 pub mod registered_methods;
+#[cfg(verus_keep_ghost)]
+#[path = "report_query.rs"]
+pub mod report_query;
+#[cfg(verus_keep_ghost)]
+#[path = "source.rs"]
+pub mod source;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::files::add_stream_bytes;
 #[cfg(not(verus_keep_ghost))]
