@@ -1,13 +1,23 @@
 //! Calls to the installed runner's public JSON commands.
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_bindings::{CompilerError, compiler_output};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Serialize, de::DeserializeOwned};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     io::Write,
     process::{Command, Stdio},
     thread,
 };
 
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+#[cfg(not(verus_keep_ghost))]
 pub fn query<T: DeserializeOwned>(operation: &str, input: &impl Serialize) -> Result<T, String> {
     let mut data = serde_json::to_vec(input).map_err(|e| e.to_string())?;
     data.push(b'\n');
@@ -45,10 +55,12 @@ pub fn query<T: DeserializeOwned>(operation: &str, input: &impl Serialize) -> Re
     serde_json::from_slice(&stdout).map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn compiler<T: DeserializeOwned>(input: Value) -> Result<T, String> {
     query("compiler-output-v1", &input)
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OutputContract {
@@ -56,11 +68,26 @@ pub struct OutputContract {
     pub commit: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn proof_rows(contract: &OutputContract, rows: &[&str]) -> Result<Vec<Option<bool>>, String> {
     let result: Vec<Option<bool>> =
         compiler(json!({"operation":"proof-rows","contract":contract,"rows":rows}))?;
-    if result.len() != rows.len() {
-        return Err("E_VERUS_BUILD: compiler response row count differs".into());
+    checked_proof_rows(rows.len(), result).map_err(str::to_owned)
+}
+
+verus! {
+pub fn checked_proof_rows(expected: usize, replies: Vec<Option<bool>>)
+    -> (result: Result<Vec<Option<bool>>, &'static str>)
+    ensures match result {
+        Ok(rows) => replies@.len() == expected && rows@ == replies@,
+        Err(message) => replies@.len() != expected
+            && message@ == "E_VERUS_BUILD: compiler response row count differs"@,
+    },
+{
+    if replies.len() == expected {
+        Ok(replies)
+    } else {
+        Err("E_VERUS_BUILD: compiler response row count differs")
     }
-    Ok(result)
+}
 }

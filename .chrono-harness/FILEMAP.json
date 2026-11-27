@@ -622,7 +622,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap-tests/tests/native_scratch.rs",
@@ -767,7 +776,16 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap-tests/tests/template.rs",
@@ -943,7 +961,20 @@
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/host-bootstrap/src/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings"
+          },
+          {
+            "path": "crates/host-bootstrap-tests/tests/verified_bindings.rs",
+            "operation": "verify.bootstrap-bindings-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/host-bootstrap/src/construction.rs",
