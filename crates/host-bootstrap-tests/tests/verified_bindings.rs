@@ -25,6 +25,29 @@ mod original_tests;
 #[path = "bindings.rs"]
 mod bindings_boundaries;
 
+#[cfg(verus_keep_ghost)]
+verus! {
+    fn cargo_root_collection_and_replay_have_distinct_entry_points() {
+        use policy::cargo_commands::cargo_command;
+        let report = cargo_command("collect-cargo-proof");
+        let original = cargo_command("collect-cargo-proof-original");
+        let replay = cargo_command("validate-cargo-proof-originals");
+        let unknown = cargo_command("collect");
+        assert(report is Report);
+        assert(original is Original);
+        assert(replay is Replay);
+        proof {
+            reveal_strlit("collect"); reveal_strlit("collect-cargo-proof");
+        reveal_strlit("collect-cargo-proof-original"); reveal_strlit("validate-cargo-proof-originals");
+            assert("collect"@.len() == 7);
+            assert("collect-cargo-proof"@.len() != 7);
+            assert("collect-cargo-proof-original"@.len() != 7);
+            assert("validate-cargo-proof-originals"@.len() != 7);
+            assert(unknown is Other);
+        }
+    }
+}
+
 // Cargo builds this same release obligation as an executable for the publishing workflow.
 mod release_observation {
     #[cfg(not(verus_keep_ghost))]
@@ -34,8 +57,8 @@ mod release_observation {
 
     verus! {
     pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.2"@,
-    { "chrono-host-bootstrap 0.1.2" }
+        ensures value@ == "chrono-host-bootstrap 0.1.6"@,
+    { "chrono-host-bootstrap 0.1.6" }
 
     pub fn diagnostic() -> (value: &'static str)
         ensures value@ == "unknown native bootstrap command or arguments"@,

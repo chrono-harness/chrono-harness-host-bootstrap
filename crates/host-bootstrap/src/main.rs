@@ -1,12 +1,47 @@
 //! 本宿主原生 bootstrap 入口；原操作、两流和所有者阶段均由实际生产者发布。
+#![allow(unexpected_cfgs)]
+use vstd::contrib::exec_spec::ExecSpecEq;
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+#[derive(PartialEq, Eq)]
+pub enum CargoCommand { Report, Original, Replay, Other }
+
+/// Select the operation that owns Cargo evidence production or replay.
+pub fn cargo_command(name: &str) -> (command: CargoCommand)
+    ensures
+        (command is Report) == (name@ == "collect-cargo-proof"@),
+        (command is Original) == (name@ == "collect-cargo-proof-original"@),
+        (command is Replay) == (name@ == "validate-cargo-proof-originals"@),
+        (command is Other) == (name@ != "collect-cargo-proof"@
+            && name@ != "collect-cargo-proof-original"@ && name@ != "validate-cargo-proof-originals"@),
+{
+    proof {
+        reveal_strlit("collect-cargo-proof");
+        reveal_strlit("collect-cargo-proof-original");
+        reveal_strlit("validate-cargo-proof-originals");
+    }
+    if <&str>::exec_eq(name, "collect-cargo-proof") { CargoCommand::Report }
+    else if <&str>::exec_eq(name, "collect-cargo-proof-original") { CargoCommand::Original }
+    else if <&str>::exec_eq(name, "validate-cargo-proof-originals") { CargoCommand::Replay }
+    else { CargoCommand::Other }
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
     download, lifecycle, owner, profile, proved_build, shared,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json;
+#[cfg(not(verus_keep_ghost))]
 use std::{io::Write, path::Path, process::ExitCode};
 
+#[cfg(not(verus_keep_ghost))]
 fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFailure> {
     let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
     let environment = std::env::vars_os().collect();
@@ -77,6 +112,7 @@ fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFail
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn run() -> Result<(), BuildFailure> {
     let arguments: Vec<String> = std::env::args_os()
         .skip(1)
@@ -130,7 +166,11 @@ fn run() -> Result<(), BuildFailure> {
             commit,
             manifest,
             sources @ ..,
-        ] if command == "collect-cargo-proof" => {
+        ] if matches!(
+            cargo_command(command),
+            CargoCommand::Report | CargoCommand::Original
+        ) =>
+        {
             let root = std::env::current_dir().map_err(|e| BuildFailure::from(e.to_string()))?;
             let contract = chrono_host_bootstrap::compiler::OutputContract {
                 version: version.clone(),
@@ -139,11 +179,27 @@ fn run() -> Result<(), BuildFailure> {
             let report = chrono_host_bootstrap::cargo_proofs::Build::new(
                 &root, directory, operation, tool, workspace,
             )
-            .and_then(|build| build.collect(package, &contract, manifest, sources))
+            .and_then(|build| {
+                if cargo_command(command) == CargoCommand::Original {
+                    build.collect_original(package, &contract, manifest, sources)
+                } else {
+                    build.collect(package, &contract, manifest, sources)
+                }
+            })
             .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))?;
             std::io::stdout()
                 .lock()
                 .write_all(report.as_bytes())
+                .map_err(|e| BuildFailure::from(e.to_string()))
+        }
+        [command] if cargo_command(command) == CargoCommand::Replay => {
+            let archive: chrono_host_bootstrap::cargo_proofs::Replay =
+                serde_json::from_reader(std::io::stdin().lock())
+                    .map_err(|e| BuildFailure::from(e.to_string()))?;
+            let roots = archive
+                .validate(chrono_host_bootstrap::compiler::proof_rows)
+                .map_err(|e| BuildFailure::from(format!("E_VERUS_COVERAGE: {e}")))?;
+            serde_json::to_writer(std::io::stdout().lock(), &roots)
                 .map_err(|e| BuildFailure::from(e.to_string()))
         }
         [command, directory, operation, verifier, source] if command == "run-compiler-proof" => {
@@ -256,6 +312,7 @@ fn run() -> Result<(), BuildFailure> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn finish(result: Result<(), BuildFailure>) -> u8 {
     match result {
         Ok(()) => 0,
@@ -269,6 +326,7 @@ fn finish(result: Result<(), BuildFailure>) -> u8 {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn logged(root: &Path, operation: &str) -> Result<u8, String> {
     use std::{
         io::{BufRead, BufReader, Write},
@@ -324,57 +382,57 @@ fn logged(root: &Path, operation: &str) -> Result<u8, String> {
     }
     Ok(wanted)
 }
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    if let [command, rest @ ..] = arguments.as_slice()
-        && command == "native-scratch"
-    {
-        let result = (|| -> std::io::Result<u8> {
-            let root = std::env::current_dir()?.canonicalize()?;
-            let git = std::ffi::OsStr::new("git");
-            match rest {
-                [action, program, args @ ..] if action == "run" => {
-                    chrono_host_bootstrap::native_scratch::run(&root, program, args, git)
+    match arguments.as_slice() {
+        [command, rest @ ..] if command == "native-scratch" => {
+            let result = (|| -> std::io::Result<u8> {
+                let root = std::env::current_dir()?.canonicalize()?;
+                let git = std::ffi::OsStr::new("git");
+                match rest {
+                    [action, program, args @ ..] if action == "run" => {
+                        chrono_host_bootstrap::native_scratch::run(&root, program, args, git)
+                    }
+                    [action, seconds] if action == "maintain" => {
+                        let seconds = seconds
+                            .to_str()
+                            .and_then(|v| v.parse().ok())
+                            .ok_or_else(|| std::io::Error::other("invalid retention seconds"))?;
+                        let removed =
+                            chrono_host_bootstrap::native_scratch::maintain(&root, seconds, git)?;
+                        println!("native check directories removed: {removed}");
+                        Ok(0)
+                    }
+                    _ => Err(std::io::Error::other(
+                        "usage: native-scratch run PROGRAM [ARG ...] | maintain SECONDS",
+                    )),
                 }
-                [action, seconds] if action == "maintain" => {
-                    let seconds = seconds
-                        .to_str()
-                        .and_then(|v| v.parse().ok())
-                        .ok_or_else(|| std::io::Error::other("invalid retention seconds"))?;
-                    let removed =
-                        chrono_host_bootstrap::native_scratch::maintain(&root, seconds, git)?;
-                    println!("native check directories removed: {removed}");
-                    Ok(0)
+            })();
+            return match result {
+                Ok(code) => code.into(),
+                Err(error) => {
+                    eprintln!("native scratch: {error}");
+                    2.into()
                 }
-                _ => Err(std::io::Error::other(
-                    "usage: native-scratch run PROGRAM [ARG ...] | maintain SECONDS",
-                )),
-            }
-        })();
-        return match result {
-            Ok(code) => code.into(),
-            Err(error) => {
-                eprintln!("native scratch: {error}");
-                2.into()
-            }
-        };
-    }
-    if let [command, selection] = arguments.as_slice()
-        && command == "ci-install-table-v1"
-    {
-        let check_storage_and_links = match selection.to_str() {
-            Some("manager") => false,
-            Some("manager-storage-links") => true,
-            _ => {
-                eprintln!("expected manager or manager-storage-links");
-                return ExitCode::from(2);
-            }
-        };
-        print!(
-            "{}",
-            chrono_host_bootstrap::template::ci_install_table(check_storage_and_links)
-        );
-        return ExitCode::SUCCESS;
+            };
+        }
+        [command, selection] if command == "ci-install-table-v1" => {
+            let check_storage_and_links = match selection.to_str() {
+                Some("manager") => false,
+                Some("manager-storage-links") => true,
+                _ => {
+                    eprintln!("expected manager or manager-storage-links");
+                    return ExitCode::from(2);
+                }
+            };
+            print!(
+                "{}",
+                chrono_host_bootstrap::template::ci_install_table(check_storage_and_links)
+            );
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
     if matches!(arguments.as_slice(), [arg] if arg == "prepare-template") {
         return match chrono_host_bootstrap::template::run() {

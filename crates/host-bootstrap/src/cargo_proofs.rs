@@ -287,7 +287,7 @@ impl Build {
         })
     }
 
-    fn outputs(&self, artifact: &Artifact) -> Result<(PathBuf, Vec<PathBuf>), String> {
+    fn output_paths(&self, artifact: &Artifact) -> Result<(PathBuf, Vec<PathBuf>), String> {
         let debug = self.directory.join("target/debug");
         let [reported, metadata] = artifact.filenames.as_slice() else {
             return Err("unexpected Cargo library outputs".into());
@@ -320,10 +320,20 @@ impl Build {
             PathBuf::from(String::from_utf8(layout.dependency).map_err(|e| e.to_string())?);
         let mut files = vec![library, metadata.clone(), metadata.with_extension("vir")];
         if reported == published {
-            if file_identity(&published)? != file_identity(&files[0])? {
-                return Err(format!("published library differs for {target}"));
-            }
             files.push(published);
+        }
+        Ok((dependency, files))
+    }
+
+    fn outputs(&self, artifact: &Artifact) -> Result<(PathBuf, Vec<PathBuf>), String> {
+        let (dependency, files) = self.output_paths(artifact)?;
+        if let [library, _, _, published] = files.as_slice() {
+            if file_identity(published)? != file_identity(library)? {
+                return Err(format!(
+                    "published library differs for {}",
+                    artifact.target.name
+                ));
+            }
         }
         Ok((dependency, files))
     }
@@ -479,9 +489,30 @@ impl Build {
         manifest: &str,
         sources: &[String],
     ) -> Result<String, String> {
-        let receipt: Receipt =
-            serde_json::from_slice(&bounded(&self.directory.join("receipt.json"))?)
-                .map_err(|e| e.to_string())?;
+        self.collect_output(package, contract, manifest, sources, false)
+    }
+
+    pub fn collect_original(
+        &self,
+        package: &str,
+        contract: &OutputContract,
+        manifest: &str,
+        sources: &[String],
+    ) -> Result<String, String> {
+        self.collect_output(package, contract, manifest, sources, true)
+    }
+
+    fn collect_output(
+        &self,
+        package: &str,
+        contract: &OutputContract,
+        manifest: &str,
+        sources: &[String],
+        include_original: bool,
+    ) -> Result<String, String> {
+        let receipt_path = self.directory.join("receipt.json");
+        let receipt_bytes = bounded(&receipt_path)?;
+        let receipt: Receipt = serde_json::from_slice(&receipt_bytes).map_err(|e| e.to_string())?;
         let process = &receipt.process;
         let method = self.method(&receipt.packages)?;
         let mut argv = vec![
@@ -536,8 +567,8 @@ impl Build {
                 }
             }
         }
-        let original =
-            &originals[found.ok_or_else(|| format!("missing Cargo proof target for {package}"))?];
+        let name = found.ok_or_else(|| format!("missing Cargo proof target for {package}"))?;
+        let original = &originals[name];
         let mut files = self.inputs(&receipt.inventory)?;
         files.extend(self.files(&originals)?);
         if let Some(path) = files
@@ -559,13 +590,236 @@ impl Build {
             .iter()
             .map(|s| checked_path(&self.root, s))
             .collect::<Result<Vec<_>, _>>()?;
-        bind_dependency(
+        let dependency = bind_dependency(
             &self.root.join(&self.manifest),
             &dep,
             &outputs[..2],
             &required,
             SourcePaths::Resolved,
         )?;
-        Ok(original.proof.into())
+        if !include_original {
+            return Ok(original.proof.into());
+        }
+        // Collection has already checked the raw serial Cargo stream, target, files,
+        // and compiler checksums. Export those same observations before scratch expires.
+        let library = &receipt.inventory[name];
+        let artifact = &outputs[0];
+        let (artifact_sha256, artifact_length) = &receipt.files[artifact];
+        serde_json::to_string(&serde_json::json!({
+            "schema": "chrono-cargo-verus-root/v1",
+            "workspace": self.manifest,
+            "receipt": {"path":receipt_path,"sha256":crate::files::sha256(&receipt_bytes),"length":receipt_bytes.len()},
+            "target": library,
+            "artifact": {"path": artifact, "sha256": artifact_sha256, "length": artifact_length},
+            "dep_info": {"path": dep, "original": String::from_utf8(dependency).map_err(|e| e.to_string())?},
+            "report_sha256": crate::files::sha256(original.proof.as_bytes()),
+        }))
+        .map_err(|error| error.to_string())
+    }
+}
+/// Read a root from the same completed serial stream and verify the archived compiler bytes.
+/// Archive paths belong to the original host. Replay never opens those absolute paths.
+#[cfg(not(verus_keep_ghost))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Replay {
+    receipt: Receipt,
+    stdout: String,
+    contract: OutputContract,
+    roots: Vec<SelectedRoot>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SelectedRoot {
+    path: String,
+    original: RootOriginal,
+    sources: BTreeMap<PathBuf, Identity>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RootOriginal {
+    schema: String,
+    workspace: String,
+    target: Library,
+    dep_info: DependencyOriginal,
+    artifact: ArtifactIdentity,
+    report_sha256: String,
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DependencyOriginal {
+    path: PathBuf,
+    original: String,
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ArtifactIdentity {
+    path: PathBuf,
+    sha256: String,
+    length: u64,
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn lexical(path: &Path) -> Result<PathBuf, String> {
+    let mut result = PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => {
+                if !result.pop() {
+                    return Err("compiler source path escapes its root".into());
+                }
+            }
+            std::path::Component::CurDir => {}
+            component => result.push(component),
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl Replay {
+    pub fn validate(
+        &self,
+        check: impl FnOnce(&OutputContract, &[&str]) -> Result<Vec<Option<bool>>, String>,
+    ) -> Result<BTreeMap<String, String>, String> {
+        let process = &self.receipt.process;
+        let cwd = Path::new(&process.cwd);
+        if !cwd.is_absolute()
+            || self.roots.is_empty()
+            || lexical(cwd)? != cwd
+            || self.stdout.len() as u64 != process.stdout.size
+            || crate::files::sha256(self.stdout.as_bytes()) != process.stdout.sha256
+        {
+            return Err("Cargo archive original stream differs".into());
+        }
+        let workspace = &self.roots[0].original.workspace;
+        let stdout = cwd.join(&process.stdout.path);
+        let directory = stdout.parent().ok_or("missing Cargo output parent")?;
+        let tool = process.argv.first().ok_or("missing Cargo executable")?;
+        let build = Build {
+            root: cwd.into(),
+            directory: directory.into(),
+            manifest: workspace.clone(),
+            tool: tool.into(),
+            operation: process.operation.clone(),
+        };
+        let mut argv = vec![tool.clone()];
+        argv.extend(build.method(&self.receipt.packages)?.argv);
+        if !operation_record_matches(
+            &process.tool,
+            "cargo-verus",
+            &process.argv,
+            &argv,
+            &process.cwd,
+            &process.cwd,
+            process.pid,
+            process.exit_code,
+        ) || process.reused_from.is_some()
+            || stdout != directory.join("0.stdout")
+            || self.receipt.files.get(Path::new(tool)).map(|id| &id.0)
+                != Some(&process.executable_sha256)
+        {
+            return Err("Cargo archive invocation differs".into());
+        }
+        let originals = collect_records(self.stdout.as_bytes(), &self.receipt.inventory)?;
+        let mut seen = BTreeSet::new();
+        let mut reports = Vec::new();
+        for selected in &self.roots {
+            let row = &selected.original;
+            if !seen.insert(&selected.path)
+                || row.schema != "chrono-cargo-verus-root/v1"
+                || &row.workspace != workspace
+                || selected.sources.is_empty()
+                || !selected.sources.contains_key(Path::new(&selected.path))
+                || Path::new(&selected.path).is_absolute()
+                || lexical(Path::new(&selected.path))? != Path::new(&selected.path)
+                || lexical(&row.target.source)? != cwd.join(&selected.path)
+            {
+                return Err("Cargo archive root declaration differs".into());
+            }
+            let mut matches = self
+                .receipt
+                .inventory
+                .iter()
+                .filter(|(_, target)| *target == &row.target);
+            let (name, _) = matches.next().ok_or("Cargo archive target absent")?;
+            if matches.next().is_some() {
+                return Err("Cargo archive target is ambiguous".into());
+            }
+            let original = &originals[name];
+            if crate::files::sha256(original.proof.as_bytes()) != row.report_sha256 {
+                return Err("Cargo report differs from its serial target".into());
+            }
+            reports.push(original.proof);
+            let (dep, files) = build.output_paths(&original.artifact)?;
+            if dep != row.dep_info.path
+                || files[0] != row.artifact.path
+                || self.receipt.files.get(&dep)
+                    != Some(&(
+                        crate::files::sha256(row.dep_info.original.as_bytes()),
+                        row.dep_info.original.len() as u64,
+                    ))
+                || self.receipt.files.get(&files[0])
+                    != Some(&(row.artifact.sha256.clone(), row.artifact.length))
+                || row.artifact.length == 0
+            {
+                return Err("Cargo archive compiler artifact or dependency differs".into());
+            }
+            let mut used = BTreeSet::new();
+            let base = cwd.join(workspace);
+            let base = base.parent().ok_or("workspace manifest parent missing")?;
+            for line in row
+                .dep_info
+                .original
+                .lines()
+                .filter_map(|l| l.strip_prefix("# checksum:sha256="))
+            {
+                let (digest, tail) = line
+                    .split_once(" file_len:")
+                    .ok_or("malformed Cargo checksum")?;
+                let (length, path) = tail.split_once(' ').ok_or("malformed Cargo source path")?;
+                let physical = lexical(&base.join(path))?;
+                let Ok(relative) = physical.strip_prefix(cwd) else {
+                    continue;
+                };
+                if let Some((wanted, bytes)) = selected.sources.get(relative) {
+                    if !used.insert(relative.to_owned())
+                        || wanted != digest
+                        || length != bytes.to_string()
+                    {
+                        return Err(format!(
+                            "Cargo candidate source differs: {}",
+                            relative.display()
+                        ));
+                    }
+                }
+            }
+            if used.len() != selected.sources.len() {
+                return Err("Cargo candidate source missing from compiled target".into());
+            }
+        }
+        let verified = check(&self.contract, &reports)?;
+        if verified.len() != reports.len() || verified.iter().any(|v| v != &Some(true)) {
+            return Err("Cargo archive lacks an entire-root proof".into());
+        }
+        Ok(self
+            .roots
+            .iter()
+            .zip(reports)
+            .map(|(selected, report)| {
+                (
+                    selected.path.clone(),
+                    crate::files::sha256(report.as_bytes()),
+                )
+            })
+            .collect())
     }
 }
