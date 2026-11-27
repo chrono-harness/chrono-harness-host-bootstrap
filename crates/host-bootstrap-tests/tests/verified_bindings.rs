@@ -58,7 +58,7 @@ fn selection_requires_all_registered_profiles(selected: &Vec<String>, declared: 
     let valid = policy::shared::declared_profiles(selected, declared);
     assert(valid ==> selected.len() > 0);
     assert(valid ==> forall|i: int| 0 <= i < selected.len()
-        ==> exists|j: int| 0 <= j < declared.len() && (#[trigger] declared@[j])@ == selected@[i]@);
+        ==> policy::name_member(declared@, (#[trigger] selected@[i])@));
 }
 
 

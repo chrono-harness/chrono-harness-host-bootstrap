@@ -1,9 +1,13 @@
 //! 本宿主共享启动产物；安装前校验全部原件，SDK 和工具不从产物中执行。
 #[cfg(verus_keep_ghost)]
-use super::*;
+use super::{
+    artifact_identity, disjoint_homes, name_member, names_subset, unique_names, valid_names,
+};
 
 #[cfg(not(verus_keep_ghost))]
-use crate::verified_bindings::{self as policy, *};
+use crate::verified_bindings::{
+    self as policy, artifact_identity, disjoint_homes, names_subset, valid_names,
+};
 use vstd::prelude::*;
 
 verus! {
@@ -198,11 +202,11 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 #[cfg(not(verus_keep_ghost))]
-fn existing_original(path: &Path) -> Result<Option<Vec<u8>>, String> {
+fn existing_original(path: &Path) -> Result<Option<Vec<u8>>, std::io::Error> {
     match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.to_string()),
+        Err(error) => Err(error),
     }
 }
 #[cfg(not(verus_keep_ghost))]
@@ -213,7 +217,7 @@ fn retain(path: &Path, bytes: &[u8]) -> Result<(), String> {
         existing
             .as_ref()
             .map(|value| value.as_deref())
-            .map_err(Clone::clone),
+            .map_err(ToString::to_string),
         bytes,
     )? {
         return Err("startup original differs".into());
@@ -703,7 +707,7 @@ impl Shared {
                     existing_original(&target)
                         .as_ref()
                         .map(|value| value.as_deref())
-                        .map_err(Clone::clone),
+                        .map_err(ToString::to_string),
                     &bytes,
                 )? {
                     return Err("startup original process stream collision".into());
