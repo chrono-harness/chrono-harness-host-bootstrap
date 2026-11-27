@@ -1,6 +1,72 @@
 //! 本宿主共享启动产物；安装前校验全部原件，SDK 和工具不从产物中执行。
+#[cfg(verus_keep_ghost)]
+use super::*;
+
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::{self as policy, *};
+use vstd::prelude::*;
+
+verus! {
+pub open spec fn overlaps(a: Seq<u8>, b: Seq<u8>) -> bool {
+    (a.len() <= b.len() && a == b.take(a.len() as int)
+        && (a.len() == b.len() || b[a.len() as int] == 47))
+    || (b.len() <= a.len() && b == a.take(b.len() as int)
+        && (b.len() == a.len() || a[b.len() as int] == 47))
+}
+
+fn separate(directory: &[u8], reserved: &str) -> (safe: bool)
+    ensures safe == !overlaps(directory@, vstd::utf8::encode_utf8(reserved@)),
+{
+    let bytes = reserved.as_bytes();
+    proof {
+        assert((directory@ == bytes@.take(directory@.len() as int))
+            == (directory@ =~= bytes@.take(directory@.len() as int)));
+        assert((bytes@ == directory@.take(bytes@.len() as int))
+            == (bytes@ =~= directory@.take(bytes@.len() as int)));
+    }
+    disjoint_homes(directory, bytes)
+}
+
+pub fn isolated_transfer(directory: &[u8]) -> (safe: bool)
+    ensures safe == (
+        !overlaps(directory@, vstd::utf8::encode_utf8(".chrono-harness/cache"@))
+        && !overlaps(directory@, vstd::utf8::encode_utf8(".chrono-harness/state"@))
+        && !overlaps(directory@, vstd::utf8::encode_utf8(".chrono-harness/bin"@))
+        && !overlaps(directory@, vstd::utf8::encode_utf8(".chrono-harness/ci"@))),
+{
+    separate(directory, ".chrono-harness/cache") && separate(directory, ".chrono-harness/state")
+        && separate(directory, ".chrono-harness/bin") && separate(directory, ".chrono-harness/ci")
+}
+
+pub fn declared_profiles(selected: &Vec<String>, available: &Vec<String>) -> (valid: bool)
+    ensures valid == (selected@.len() > 0 && unique_names(selected@)
+        && forall|i: int| 0 <= i < selected@.len()
+            ==> name_member(available@, (#[trigger] selected@[i])@)),
+{
+    !selected.is_empty() && valid_names(selected) && names_subset(selected, available)
+}
+
+/// Only an absent or identical original can be published. Keep the original IO error.
+pub fn original_matches<E>(observed: Result<Option<&[u8]>, E>, bytes: &[u8])
+    -> (allowed: Result<bool, E>)
+    ensures allowed == match observed {
+        Err(e) => Err(e),
+        Ok(Some(old)) => Ok(old@ == bytes@),
+        Ok(None) => Ok(true),
+    },
+{
+    match observed {
+        Err(e) => Err(e),
+        Ok(None) => Ok(true),
+        Ok(Some(old)) => Ok(artifact_identity::equal_bytes(old, bytes)),
+    }
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::codec::decode;
+#[cfg(not(verus_keep_ghost))]
 use crate::files::{resolve_program, sha256};
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment, NativePlatform},
     construction::{BuildFailure, Report},
@@ -8,10 +74,13 @@ use crate::{
     original::Producer,
     profile::{self, Profile},
     source::{self, SourceObservation},
-    verified_bindings::{self as policy, Executable},
+    verified_bindings::Executable,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
@@ -21,14 +90,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 const INSTALL: &str = ".chrono-harness/state/startup-install.json";
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProfileEntry {
     config: String,
     build: bool,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Registration {
@@ -37,12 +109,14 @@ struct Registration {
     profiles: BTreeMap<String, ProfileEntry>,
     consumers: BTreeMap<String, Vec<String>>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Reference {
     path: String,
     sha256: String,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct File {
@@ -52,6 +126,7 @@ struct File {
     size: u64,
     mode: u32,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ArtifactProfile {
@@ -60,6 +135,7 @@ struct ArtifactProfile {
     report: Reference,
     files: Vec<File>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
@@ -70,6 +146,7 @@ struct Manifest {
     config_sha256: String,
     profiles: BTreeMap<String, ArtifactProfile>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Installation {
@@ -81,11 +158,13 @@ struct Installation {
     local_executables: BTreeMap<String, Vec<Executable>>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct SelectedProfile {
     config_sha256: String,
     producer: Producer,
     raw: Vec<u8>,
 }
+#[cfg(not(verus_keep_ghost))]
 pub struct Shared {
     config: String,
     config_sha256: String,
@@ -93,6 +172,7 @@ pub struct Shared {
     profiles: BTreeMap<String, SelectedProfile>,
     transfer: PathBuf,
 }
+#[cfg(not(verus_keep_ghost))]
 struct Validated {
     manifest: Manifest,
     originals: BTreeMap<String, Vec<u8>>,
@@ -100,11 +180,13 @@ struct Validated {
     payloads: BTreeMap<String, Vec<u8>>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn encode(value: &impl Serialize) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
     Ok(bytes)
 }
+#[cfg(not(verus_keep_ghost))]
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::create_dir_all(path.parent().ok_or("missing startup parent")?)
         .map_err(|e| e.to_string())?;
@@ -115,16 +197,33 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .and_then(|mut f| f.write_all(bytes))
         .map_err(|e| e.to_string())
 }
-fn retain(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if path.exists() {
-        if fs::read(path).map_err(|e| e.to_string())? != bytes {
-            return Err("startup original differs".into());
-        }
-        Ok(())
-    } else {
-        write_new(path, bytes)
+#[cfg(not(verus_keep_ghost))]
+fn existing_original(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
     }
 }
+#[cfg(not(verus_keep_ghost))]
+fn retain(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let existing = existing_original(path);
+    let absent = matches!(&existing, Ok(None));
+    if !original_matches(
+        existing
+            .as_ref()
+            .map(|value| value.as_deref())
+            .map_err(Clone::clone),
+        bytes,
+    )? {
+        return Err("startup original differs".into());
+    }
+    if absent {
+        write_new(path, bytes)?;
+    }
+    Ok(())
+}
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn replace(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     let parent = path.parent().ok_or("missing startup destination parent")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -140,6 +239,7 @@ pub(crate) fn replace(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String
     temporary.persist(path).map_err(|e| e.to_string())?;
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn source(root: &Path, environment: &Environment) -> Result<SourceObservation, String> {
     let metadata = fs::symlink_metadata(root.join(".git")).map_err(|e| e.to_string())?;
     if !metadata.is_dir() {
@@ -153,12 +253,14 @@ fn source(root: &Path, environment: &Environment) -> Result<SourceObservation, S
     }
     Ok(observed)
 }
+#[cfg(not(verus_keep_ghost))]
 fn streams(report: &Report) -> impl Iterator<Item = &crate::execution::Stream> {
     report
         .operations
         .iter()
         .flat_map(|row| [&row.stdout, &row.stderr])
 }
+#[cfg(not(verus_keep_ghost))]
 fn imported(original: &[u8], binding: &str) -> Result<Vec<u8>, String> {
     let mut value: Value = decode(original)?;
     value["provenance"] =
@@ -166,6 +268,7 @@ fn imported(original: &[u8], binding: &str) -> Result<Vec<u8>, String> {
     encode(&value)
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Shared {
     /// 全部配置和目的地先预检；不选择工具链或建立缓存目录。
     pub fn read(root: &Path, config: &str, native: &NativePlatform) -> Result<Self, String> {
@@ -182,14 +285,8 @@ impl Shared {
             .strip_suffix('/')
             .ok_or("startup directory requires trailing slash")?;
         let transfer = profile::path(root, directory, b".chrono-harness/")?;
-        for reserved in [
-            ".chrono-harness/state",
-            ".chrono-harness/bin",
-            ".chrono-harness/ci",
-        ] {
-            if !policy::disjoint_homes(directory.as_bytes(), reserved.as_bytes()) {
-                return Err("startup transfer overlaps source, tools or evidence".into());
-            }
+        if !isolated_transfer(directory.as_bytes()) {
+            return Err("startup transfer overlaps source, cache, tools or evidence".into());
         }
         let mut profiles = BTreeMap::new();
         let mut destinations = BTreeSet::new();
@@ -225,10 +322,7 @@ impl Shared {
         }
         let available = profiles.keys().cloned().collect();
         for selected in registration.consumers.values() {
-            if selected.is_empty()
-                || !policy::valid_names(selected)
-                || !policy::names_subset(selected, &available)
-            {
+            if !declared_profiles(selected, &available) {
                 return Err("startup consumer requires explicit unique profiles".into());
             }
         }
@@ -605,7 +699,13 @@ impl Shared {
                 let target = profile::path(root, &descriptor.path, b".chrono-harness/state/")?;
                 let bytes =
                     profile::read(&self.transfer, &descriptor.path, b".chrono-harness/state/")?;
-                if target.exists() && fs::read(&target).map_err(|e| e.to_string())? != bytes {
+                if !original_matches(
+                    existing_original(&target)
+                        .as_ref()
+                        .map(|value| value.as_deref())
+                        .map_err(Clone::clone),
+                    &bytes,
+                )? {
                     return Err("startup original process stream collision".into());
                 }
                 writes.push((target, bytes, 0o644));
