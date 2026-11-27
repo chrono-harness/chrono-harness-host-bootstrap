@@ -54,6 +54,9 @@ pub mod report_query;
 #[cfg(verus_keep_ghost)]
 #[path = "source.rs"]
 pub mod source;
+#[cfg(verus_keep_ghost)]
+#[path = "template.rs"]
+pub mod template;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::files::add_stream_bytes;
 #[cfg(not(verus_keep_ghost))]

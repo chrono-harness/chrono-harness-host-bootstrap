@@ -1087,3 +1087,51 @@ fn retained_blobs_require_the_regular_mode_type_path_and_oid() {
     check_retained_blob_cases("1111111111111111111111111111111111111111");
     check_retained_blob_cases("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 }
+
+#[cfg(verus_keep_ghost)]
+use self::policy::template::{AnswerFields, starts};
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::template::AnswerFields;
+
+verus! {
+/// Exercise real physical lines. These preconditions describe the inputs of each class;
+/// the expected replacement text, state transitions and endings are specified here.
+fn template_answer_cases(plain: &str, repo: &str, dev: &str, replacement: &str)
+    requires
+        !starts(vstd::utf8::encode_utf8(plain@), vstd::utf8::encode_utf8("repository:"@)),
+        !starts(vstd::utf8::encode_utf8(plain@), vstd::utf8::encode_utf8("dev_branch:"@)),
+        starts(vstd::utf8::encode_utf8(repo@), vstd::utf8::encode_utf8("repository:"@)),
+        !starts(vstd::utf8::encode_utf8(dev@), vstd::utf8::encode_utf8("repository:"@)),
+        starts(vstd::utf8::encode_utf8(dev@), vstd::utf8::encode_utf8("dev_branch:"@)),
+        ({ let bytes = vstd::utf8::encode_utf8(repo@);
+            bytes.len() >= 2 && bytes[bytes.len()-2] == 13 && bytes.last() == 10 }),
+        ({ let bytes = vstd::utf8::encode_utf8(dev@);
+            bytes.len() > 0 && bytes.last() != 10 }),
+{
+    let mut fields = AnswerFields { repository: false, branch: false };
+    expect(!fields.complete());
+    let (text, ending) = fields.line(plain, replacement, "branch").unwrap();
+    expect(policy::artifact_identity::equal_text(text, plain));
+    expect(policy::artifact_identity::equal_text(ending, ""));
+    let (text, ending) = fields.line(dev, replacement, "branch").unwrap();
+    expect(policy::artifact_identity::equal_text(text, "branch"));
+    expect(policy::artifact_identity::equal_text(ending, ""));
+    expect(!fields.complete());
+    expect(fields.line(dev, replacement, "branch").is_none());
+    let (text, ending) = fields.line(repo, replacement, "branch").unwrap();
+    expect(policy::artifact_identity::equal_text(text, replacement));
+    expect(policy::artifact_identity::equal_text(ending, "\r\n"));
+    expect(fields.complete());
+    expect(fields.line(repo, replacement, "branch").is_none());
+}
+}
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn local_answers_and_line_endings_survive_green_template_setup() {
+    template_answer_cases(
+        " repository: user's own nested answer\n",
+        "repository: old\r\n",
+        "dev_branch: old",
+        "repository: \"owner/project\"",
+    );
+}
