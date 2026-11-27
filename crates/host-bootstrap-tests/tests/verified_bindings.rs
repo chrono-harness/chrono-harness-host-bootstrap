@@ -1034,3 +1034,56 @@ fn native_scratch_keeps_the_child_failure_when_its_timestamp_cannot_be_refreshed
     );
     assert!(diagnostics.is_empty());
 }
+
+#[cfg(verus_keep_ghost)]
+use self::policy::{report_query::revision_matches, source::regular_blob};
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::{report_query::revision_matches, source::regular_blob};
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_revisions_require_both_observed_identities() {
+    proof {
+        reveal_strlit("c"); reveal_strlit("tree");
+        assert("c"@.len() != "tree"@.len());
+    }
+    expect(revision_matches(Some("c"), Some("tree"), "c", "tree"));
+    expect(!revision_matches(None, Some("tree"), "c", "tree"));
+    expect(!revision_matches(Some("c"), None, "c", "tree"));
+    expect(!revision_matches(None, None, "c", "tree"));
+    expect(!revision_matches(Some("tree"), Some("tree"), "c", "tree"));
+    expect(!revision_matches(Some("c"), Some("c"), "c", "tree"));
+}
+
+fn check_retained_blob_cases(oid: &str)
+    requires policy::artifact_identity::oid(vstd::utf8::encode_utf8(oid@)),
+{
+    proof {
+        reveal_strlit("100644"); reveal_strlit("100755"); reveal_strlit("120000");
+        reveal_strlit("blob"); reveal_strlit("tree"); reveal_strlit("path");
+        reveal_strlit("other"); reveal_strlit("0");
+        assert('0' as u32 == 48);
+        assert(vstd::utf8::encode_scalar(48) == seq![48u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+        assert(vstd::utf8::encode_utf8("0"@) =~= seq![48u8]);
+        assert("120000"@[1] != "100644"@[1] && "120000"@[1] != "100755"@[1]);
+        assert("blob"@[0] != "tree"@[0]);
+        assert("path"@.len() != "other"@.len());
+    }
+    expect(regular_blob(&["100644", "blob", oid], "path", "path").is_some());
+    expect(regular_blob(&["100755", "blob", oid], "path", "path").is_some());
+    expect(regular_blob(&["120000", "blob", oid], "path", "path").is_none());
+    expect(regular_blob(&["100644", "tree", oid], "path", "path").is_none());
+    expect(regular_blob(&["100644", "blob", oid], "other", "path").is_none());
+    expect(regular_blob(&["100644", "blob", "0"], "path", "path").is_none());
+    expect(regular_blob(&["100644", "blob"], "path", "path").is_none());
+    expect(regular_blob(&["100644", "blob", oid, "extra"], "path", "path").is_none());
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn retained_blobs_require_the_regular_mode_type_path_and_oid() {
+    check_retained_blob_cases("1111111111111111111111111111111111111111");
+    check_retained_blob_cases("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+}
