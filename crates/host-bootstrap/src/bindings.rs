@@ -1,9 +1,15 @@
 //! 工具绑定的 JSON 和原生 IO 适配；身份与选择判断复用同源证明内核。
+#[cfg(not(verus_keep_ghost))]
 use crate::codec::json;
+#[cfg(not(verus_keep_ghost))]
 use crate::files::{file_identity, resolve_program};
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_bindings::{self as policy, ConfiguredAction, DeclarationSource, Executable};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     ffi::{OsStr, OsString},
@@ -12,25 +18,22 @@ use std::{
     process::{Command, Output},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub type Environment = BTreeMap<OsString, OsString>;
+#[cfg(not(verus_keep_ghost))]
 pub use policy::NativePlatform;
 
+#[cfg(not(verus_keep_ghost))]
 pub fn native_platform() -> Result<NativePlatform, String> {
-    let system = match std::env::consts::OS {
-        "macos" => "Darwin",
-        "linux" => "Linux",
-        other => return Err(format!("unsupported bootstrap platform: {other}")),
-    };
-    let machine = match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => "arm64",
-        (_, machine) => machine,
-    };
+    let (system, machine) = native_platform_names(std::env::consts::OS, std::env::consts::ARCH)
+        .map_err(|system| format!("unsupported bootstrap platform: {system}"))?;
     Ok(NativePlatform {
         system: system.into(),
         machine: machine.into(),
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Binding {
@@ -41,6 +44,7 @@ pub struct Binding {
     pub allow_relocation: bool,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tools<T> {
@@ -48,15 +52,18 @@ pub struct Tools<T> {
     pub rustc: T,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Declarations {
     pub tools: Tools<Binding>,
     registry: bool,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn typed<T: serde::de::DeserializeOwned>(value: &Value) -> Result<T, String> {
     serde_json::from_value(value.clone()).map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Declarations {
     /// 注册表字节由当前源码读取方提供，历史端点仍只读取固定数据。
     pub fn parse(
@@ -234,6 +241,7 @@ impl Declarations {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn physical_file(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     if !metadata.file_type().is_file() {
@@ -245,6 +253,7 @@ fn physical_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn executable(
     root: &Path,
     path: &Path,
@@ -264,6 +273,7 @@ fn executable(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn command(
     root: &Path,
     program: &Path,
@@ -273,6 +283,7 @@ pub(crate) fn command(
     crate::descriptors::command(root, program, args, environment)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn capture(
     root: &Path,
     program: &Path,
@@ -284,6 +295,7 @@ pub(crate) fn capture(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn output_text(output: Output, name: &str) -> Result<String, String> {
     if !output.status.success() {
         return Err(format!(
@@ -295,4 +307,34 @@ pub(crate) fn output_text(output: Output, name: &str) -> Result<String, String> 
     String::from_utf8(output.stdout)
         .map(|text| text.trim().to_owned())
         .map_err(|error| error.to_string())
+}
+
+#[cfg(verus_keep_ghost)]
+use super::artifact_identity::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::artifact_identity::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn native_platform_names<'a>(os: &'a str, arch: &'a str)
+    -> (platform: Result<(&'static str, &'a str), &'a str>)
+    ensures platform == if os@ == "macos"@ {
+        Ok(("Darwin", if arch@ == "aarch64"@ { "arm64" } else { arch }))
+    } else if os@ == "linux"@ {
+        Ok(("Linux", arch))
+    } else {
+        Err(os)
+    },
+{
+    if equal_text(os, "macos") {
+        Ok(("Darwin", if equal_text(arch, "aarch64") { "arm64" } else { arch }))
+    } else if equal_text(os, "linux") {
+        Ok(("Linux", arch))
+    } else {
+        Err(os)
+    }
+}
 }

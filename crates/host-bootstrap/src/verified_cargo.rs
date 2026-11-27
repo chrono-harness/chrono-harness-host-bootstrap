@@ -5,6 +5,18 @@ use super::artifact_identity;
 use crate::verified_bindings::artifact_identity;
 use artifact_identity::{equal_bytes, equal_text};
 #[cfg(verus_keep_ghost)]
+#[path = "proved_build.rs"]
+pub mod proved_build;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::proved_build::{
+    NativeHeader, OwnerSourceMode, native_header, owner_source_mode, required_compiler_paths,
+};
+#[cfg(verus_keep_ghost)]
+pub use proved_build::{
+    NativeHeader, OwnerSourceMode, compiler_has_path, native_header, owner_source_mode,
+    required_compiler_paths,
+};
+#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 use vstd::slice::{slice_subrange, slice_to_vec};
 #[cfg(not(verus_keep_ghost))]
@@ -298,76 +310,6 @@ pub fn owner_source_arguments<'a>(args: &'a [String]) -> (out: Option<(&'a str, 
 {
     if args.len() < 3 || !equal_text(args[0].as_str(), "check-compiler-sources") { return None; }
     Some((args[1].as_str(), args[2].as_str(), slice_subrange(args, 3, args.len())))
-}
-
-pub enum OwnerSourceMode { Native, Proof, Unknown }
-
-/// Empty source declarations fail before opening the requested dep-info.
-pub fn owner_source_mode(kind: &str, count: usize) -> (mode: Option<OwnerSourceMode>)
-    ensures mode.is_none() == (count == 0),
-        match mode {
-            Some(OwnerSourceMode::Native) => kind@ == "native"@,
-            Some(OwnerSourceMode::Proof) => kind@ == "proof"@,
-            Some(OwnerSourceMode::Unknown) => kind@ != "native"@ && kind@ != "proof"@,
-            None => true,
-        },
-{
-    if count == 0 { None }
-    else if equal_text(kind, "native") { Some(OwnerSourceMode::Native) }
-    else if equal_text(kind, "proof") { Some(OwnerSourceMode::Proof) }
-    else { Some(OwnerSourceMode::Unknown) }
-}
-
-/// Path ordering is observed by std::path. Metadata and canonicalization come from the filesystem.
-pub enum NativeHeader { InspectAlias, Accept, Reject }
-pub fn native_header(lexical: std::cmp::Ordering, alias: Option<(bool, std::cmp::Ordering)>)
-    -> (action: NativeHeader)
-    ensures (action is Accept) == (lexical == std::cmp::Ordering::Equal
-                || alias == Some((true, std::cmp::Ordering::Equal))),
-        (action is InspectAlias) == (lexical != std::cmp::Ordering::Equal && alias.is_none()),
-        (action is Reject) == (lexical != std::cmp::Ordering::Equal && alias.is_some()
-                && alias != Some((true, std::cmp::Ordering::Equal))),
-{
-    match (lexical, alias) {
-        (std::cmp::Ordering::Equal, _) | (_, Some((true, std::cmp::Ordering::Equal))) => NativeHeader::Accept,
-        (_, None) => NativeHeader::InspectAlias,
-        _ => NativeHeader::Reject,
-    }
-}
-
-pub open spec fn compiler_has_path(paths: Seq<Vec<u8>>, name: Seq<u8>) -> bool {
-    exists|i: int| 0 <= i < paths.len() && (#[trigger] paths[i])@ == name
-}
-
-fn compiler_contains(paths: &[Vec<u8>], name: &[u8]) -> (found: bool)
-    ensures found == compiler_has_path(paths@,name@),
-{
-    let mut i: usize = 0;
-    while i < paths.len()
-        invariant i <= paths.len(), forall|j:int| 0 <= j < i ==> (#[trigger] paths@[j])@ != name@,
-        decreases paths.len() - i,
-    {
-        if equal_bytes(paths[i].as_slice(),name) { return true; }
-        i += 1;
-    }
-    false
-}
-
-pub fn required_compiler_paths(paths: &[Vec<u8>], required: &[String]) -> (found: bool)
-    ensures found == (required.len() > 0 && forall|i:int| 0 <= i < required.len()
-        ==> compiler_has_path(paths@,vstd::utf8::encode_utf8((#[trigger] required@[i])@))),
-{
-    if required.len() == 0 { return false; }
-    let mut i: usize = 0;
-    while i < required.len()
-        invariant i <= required.len(), required.len() > 0, forall|j:int| 0 <= j < i
-            ==> compiler_has_path(paths@,vstd::utf8::encode_utf8((#[trigger] required@[j])@)),
-        decreases required.len() - i,
-    {
-        if !compiler_contains(paths,required[i].as_str().as_bytes()) { return false; }
-        i += 1;
-    }
-    true
 }
 
 pub fn nonempty_artifact(regular: bool, length: u64) -> (present: bool)
