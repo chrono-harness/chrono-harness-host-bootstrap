@@ -1,13 +1,21 @@
 //! 正式构建消费官方 Cargo-Verus 的原输出、编译器 checksum 和原库字节。
+#[cfg(not(verus_keep_ghost))]
 use crate::compiler::{self, OutputContract};
+#[cfg(not(verus_keep_ghost))]
 use crate::files::file_identity;
+#[cfg(not(verus_keep_ghost))]
 use crate::retention;
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_cargo::{
     self as cargo, Artifact, BuildTargets, Cargo, Identity, Record, Recovery, TargetIdentity,
 };
+#[cfg(not(verus_keep_ghost))]
 use crate::{bindings::Environment, construction::BuildFailure, execution, profile};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs,
@@ -15,6 +23,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Library {
@@ -24,6 +33,7 @@ pub struct Library {
     pub sources: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Binary {
@@ -33,6 +43,7 @@ pub struct Binary {
     pub dependency_prefix: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -51,6 +62,7 @@ pub struct Config {
     pub binary: Binary,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Proof {
@@ -64,6 +76,7 @@ struct Proof {
     dependency: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Serialize)]
 struct Admission {
     schema: &'static str,
@@ -73,6 +86,7 @@ struct Admission {
     proof_reused: bool,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn bounded(path: &Path) -> Result<Vec<u8>, String> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     if !cargo::bounded_original(metadata.file_type().is_file(), metadata.len()) {
@@ -96,6 +110,7 @@ pub(crate) fn bounded(path: &Path) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn identity(path: &Path) -> Result<Identity, String> {
     let (sha256, length) = file_identity(path)?;
     Ok(Identity {
@@ -105,6 +120,7 @@ fn identity(path: &Path) -> Result<Identity, String> {
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn preserve_if_present(source: &Path, destination: &Path) -> Result<(), String> {
     match fs::symlink_metadata(source) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -113,6 +129,7 @@ fn preserve_if_present(source: &Path, destination: &Path) -> Result<(), String> 
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let parent = path.parent().ok_or("missing proof parent")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -122,6 +139,7 @@ pub(crate) fn persist(path: &Path, value: &impl Serialize) -> Result<(), String>
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn records(raw: &[u8], contract: &OutputContract) -> Result<Vec<Record>, String> {
     let rows: Vec<&serde_json::value::RawValue> = serde_json::Deserializer::from_slice(raw)
         .into_iter()
@@ -140,6 +158,7 @@ fn records(raw: &[u8], contract: &OutputContract) -> Result<Vec<Record>, String>
         .collect()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn selected(artifact: &Artifact, manifest: &Path, source: &Path, name: &str, kind: &str) -> bool {
     cargo::artifact_selected(
         artifact,
@@ -150,6 +169,7 @@ fn selected(artifact: &Artifact, manifest: &Path, source: &Path, name: &str, kin
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn library_paths(
     root: &Path,
     config: &Config,
@@ -178,11 +198,13 @@ fn library_paths(
     ))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) enum SourcePaths {
     Literal,
     Resolved,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl SourcePaths {
     fn identity(&self, path: &Path) -> Result<PathBuf, String> {
         match self {
@@ -192,6 +214,7 @@ impl SourcePaths {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn bind_dependency(
     manifest: &Path,
     dependency: &Path,
@@ -247,19 +270,20 @@ pub(crate) fn bind_dependency(
 }
 
 /// Admit the original compiler dependency information supplied by an independent owner check.
+#[cfg(not(verus_keep_ghost))]
 pub fn check_owner_sources(
     kind: &str,
     output: &Path,
     sources: &[String],
     query: impl Fn(serde_json::Value) -> Result<serde_json::Value, String>,
 ) -> Result<(), String> {
-    let mode = cargo::owner_source_mode(kind, sources.len()).ok_or("no source files declared")?;
+    let mode = owner_source_mode(kind, sources.len()).ok_or("no source files declared")?;
     let mut dependency = output.as_os_str().to_os_string();
     dependency.push(".d");
     let dependency = PathBuf::from(dependency);
     let raw = bounded(&dependency)?;
     let matched = match mode {
-        cargo::OwnerSourceMode::Native => {
+        OwnerSourceMode::Native => {
             use std::os::unix::ffi::OsStringExt;
             let result = query(json!({"operation":"dependency-header", "dependency":raw}))?;
             let header: Option<(Vec<u8>, Vec<Vec<u8>>)> =
@@ -269,24 +293,21 @@ pub fn check_owner_sources(
             declared.push(".d");
             let declared = Path::new(&declared);
             let lexical = declared.cmp(dependency.as_path());
-            if matches!(
-                cargo::native_header(lexical, None),
-                cargo::NativeHeader::InspectAlias
-            ) {
+            if matches!(native_header(lexical, None), NativeHeader::InspectAlias) {
                 let original = fs::symlink_metadata(declared).map_err(|e| e.to_string())?;
                 let selected = fs::canonicalize(&dependency).map_err(|e| e.to_string())?;
                 let actual = fs::canonicalize(declared).map_err(|e| e.to_string())?;
                 let observation = (original.file_type().is_file(), actual.cmp(&selected));
                 if matches!(
-                    cargo::native_header(lexical, Some(observation)),
-                    cargo::NativeHeader::Reject
+                    native_header(lexical, Some(observation)),
+                    NativeHeader::Reject
                 ) {
                     return Err("native compiler header names another dependency file".into());
                 }
             }
-            cargo::required_compiler_paths(&paths, sources)
+            required_compiler_paths(&paths, sources)
         }
-        cargo::OwnerSourceMode::Proof => {
+        OwnerSourceMode::Proof => {
             let bindings = sources
                 .iter()
                 .map(|name| {
@@ -298,7 +319,7 @@ pub fn check_owner_sources(
                 "targets":[dependency.as_os_str().as_encoded_bytes(),output.as_os_str().as_encoded_bytes()],
                 "sources":bindings}))?).map_err(|e| e.to_string())?
         }
-        cargo::OwnerSourceMode::Unknown => {
+        OwnerSourceMode::Unknown => {
             return Err(format!("unknown compiler output kind {kind:?}"));
         }
     };
@@ -313,6 +334,7 @@ pub fn check_owner_sources(
 }
 
 /// Collect the original result of a required owner operation after execution.
+#[cfg(not(verus_keep_ghost))]
 pub fn check_owner_proof(
     contract: &OutputContract,
     report: &Path,
@@ -334,6 +356,7 @@ pub fn check_owner_proof(
     Ok(original)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Result<(), String> {
     if !cargo::content_matches(
         &crate::files::sha256(bytes),
@@ -348,6 +371,7 @@ fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Resu
 }
 
 /// 官方构建进程仍由既有 runner 执行；这里不实现编译器 wrapper。
+#[cfg(not(verus_keep_ghost))]
 pub fn build(
     root: &Path,
     declaration: &str,
@@ -358,6 +382,7 @@ pub fn build(
     build_attempt(root, declaration, inherited, stdout, stderr, true)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn build_attempt(
     root: &Path,
     declaration: &str,
@@ -437,6 +462,7 @@ fn build_attempt(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn run_attempt(
     root: &Path,
     declaration: &str,
@@ -794,6 +820,7 @@ fn run_attempt(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn validate_prior(
     root: &Path,
     config: &Config,
@@ -863,6 +890,7 @@ fn validate_prior(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bind_final_binary(
     root: &Path,
     config: &Config,
@@ -907,4 +935,85 @@ fn bind_final_binary(
         );
     }
     Ok(())
+}
+
+#[cfg(verus_keep_ghost)]
+use super::artifact_identity::{equal_bytes, equal_text};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::artifact_identity::{equal_bytes, equal_text};
+#[cfg(not(verus_keep_ghost))]
+use vstd::prelude::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub enum OwnerSourceMode { Native, Proof, Unknown }
+
+/// Empty source declarations fail before opening the requested dep-info.
+pub fn owner_source_mode(kind: &str, count: usize) -> (mode: Option<OwnerSourceMode>)
+    ensures mode.is_none() == (count == 0),
+        match mode {
+            Some(OwnerSourceMode::Native) => kind@ == "native"@,
+            Some(OwnerSourceMode::Proof) => kind@ == "proof"@,
+            Some(OwnerSourceMode::Unknown) => kind@ != "native"@ && kind@ != "proof"@,
+            None => true,
+        },
+{
+    if count == 0 { None }
+    else if equal_text(kind, "native") { Some(OwnerSourceMode::Native) }
+    else if equal_text(kind, "proof") { Some(OwnerSourceMode::Proof) }
+    else { Some(OwnerSourceMode::Unknown) }
+}
+
+/// Path ordering is observed by std::path. Metadata and canonicalization come from the filesystem.
+pub enum NativeHeader { InspectAlias, Accept, Reject }
+pub fn native_header(lexical: std::cmp::Ordering, alias: Option<(bool, std::cmp::Ordering)>)
+    -> (action: NativeHeader)
+    ensures (action is Accept) == (lexical == std::cmp::Ordering::Equal
+                || alias == Some((true, std::cmp::Ordering::Equal))),
+        (action is InspectAlias) == (lexical != std::cmp::Ordering::Equal && alias.is_none()),
+        (action is Reject) == (lexical != std::cmp::Ordering::Equal && alias.is_some()
+                && alias != Some((true, std::cmp::Ordering::Equal))),
+{
+    match (lexical, alias) {
+        (std::cmp::Ordering::Equal, _) | (_, Some((true, std::cmp::Ordering::Equal))) => NativeHeader::Accept,
+        (_, None) => NativeHeader::InspectAlias,
+        _ => NativeHeader::Reject,
+    }
+}
+
+pub open spec fn compiler_has_path(paths: Seq<Vec<u8>>, name: Seq<u8>) -> bool {
+    exists|i: int| 0 <= i < paths.len() && (#[trigger] paths[i])@ == name
+}
+
+fn compiler_contains(paths: &[Vec<u8>], name: &[u8]) -> (found: bool)
+    ensures found == compiler_has_path(paths@,name@),
+{
+    let mut i: usize = 0;
+    while i < paths.len()
+        invariant i <= paths.len(), forall|j:int| 0 <= j < i ==> (#[trigger] paths@[j])@ != name@,
+        decreases paths.len() - i,
+    {
+        if equal_bytes(paths[i].as_slice(),name) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub fn required_compiler_paths(paths: &[Vec<u8>], required: &[String]) -> (found: bool)
+    ensures found == (required.len() > 0 && forall|i:int| 0 <= i < required.len()
+        ==> compiler_has_path(paths@,vstd::utf8::encode_utf8((#[trigger] required@[i])@))),
+{
+    if required.len() == 0 { return false; }
+    let mut i: usize = 0;
+    while i < required.len()
+        invariant i <= required.len(), required.len() > 0, forall|j:int| 0 <= j < i
+            ==> compiler_has_path(paths@,vstd::utf8::encode_utf8((#[trigger] required@[j])@)),
+        decreases required.len() - i,
+    {
+        if !compiler_contains(paths,required[i].as_str().as_bytes()) { return false; }
+        i += 1;
+    }
+    true
+}
 }

@@ -5,7 +5,11 @@ use chrono_host_bootstrap::verified_bindings as policy;
 #[path = "../../host-bootstrap/src/verified_bindings.rs"]
 mod policy;
 
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::bindings::native_platform_names;
 use policy::Executable;
+#[cfg(verus_keep_ghost)]
+use policy::bindings::native_platform_names;
 
 use vstd::prelude::*;
 #[path = "support/expect.rs"]
@@ -27,6 +31,7 @@ mod bindings_boundaries;
 
 #[cfg(verus_keep_ghost)]
 verus! {
+
     fn cargo_root_collection_and_replay_have_distinct_entry_points() {
         use policy::cargo_commands::cargo_command;
         let report = cargo_command("collect-cargo-proof");
@@ -57,8 +62,8 @@ mod release_observation {
 
     verus! {
     pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.7"@,
-    { "chrono-host-bootstrap 0.1.7" }
+        ensures value@ == "chrono-host-bootstrap 0.1.8"@,
+    { "chrono-host-bootstrap 0.1.8" }
 
     pub fn diagnostic() -> (value: &'static str)
         ensures value@ == "unknown native bootstrap command or arguments"@,
@@ -1198,3 +1203,28 @@ mod compiler_query;
 #[cfg(verus_keep_ghost)]
 #[path = "support/tool.rs"]
 mod compiler_fixture;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_platform_preserves_the_report_consumer_machine_name() {
+    proof {
+        reveal_strlit("macos"); reveal_strlit("linux"); reveal_strlit("freebsd");
+        reveal_strlit("aarch64"); reveal_strlit("x86_64");
+        assert("linux"@[0] != "macos"@[0]);
+        assert("linux"@ != "macos"@);
+        assert("x86_64"@.len() != "aarch64"@.len());
+        assert("freebsd"@.len() != "linux"@.len());
+        assert("freebsd"@.len() != "macos"@.len());
+    }
+    let darwin = native_platform_names("macos", "aarch64").unwrap();
+    expect(policy::artifact_identity::equal_text(darwin.0, "Darwin"));
+    expect(policy::artifact_identity::equal_text(darwin.1, "arm64"));
+    let mac_x86 = native_platform_names("macos", "x86_64").unwrap();
+    expect(policy::artifact_identity::equal_text(mac_x86.1, "x86_64"));
+    let linux = native_platform_names("linux", "aarch64").unwrap();
+    expect(policy::artifact_identity::equal_text(linux.0, "Linux"));
+    expect(policy::artifact_identity::equal_text(linux.1, "aarch64"));
+    expect(policy::artifact_identity::equal_text(
+        native_platform_names("freebsd", "x86_64").unwrap_err(), "freebsd"));
+}
+}

@@ -12,6 +12,10 @@ pub mod cargo_commands;
 #[path = "compiler.rs"]
 pub mod compiler;
 
+#[cfg(verus_keep_ghost)]
+#[path = "bindings.rs"]
+pub mod bindings;
+
 #[path = "native_policy.rs"]
 pub mod native_policy;
 pub use native_policy::process_exit;
