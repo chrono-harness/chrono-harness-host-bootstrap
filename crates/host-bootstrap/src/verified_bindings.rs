@@ -8,6 +8,10 @@ use vstd::prelude::*;
 #[path = "main.rs"]
 pub mod cargo_commands;
 
+#[cfg(verus_keep_ghost)]
+#[path = "compiler.rs"]
+pub mod compiler;
+
 #[path = "native_policy.rs"]
 pub mod native_policy;
 pub use native_policy::process_exit;

@@ -1,6 +1,27 @@
+#![allow(unexpected_cfgs)]
 //! Rust toolchain command fixture for the bootstrap binding tests.
+#[cfg(not(verus_keep_ghost))]
 use std::{env, path::Path, process::ExitCode};
 
+use vstd::contrib::exec_spec::ExecSpecEq;
+use vstd::prelude::*;
+
+verus! {
+/// The runner fixture emits a literal wire response independently of the input rows.
+fn proof_row_reply(case: &str) -> (reply: Option<&'static str>)
+    ensures (match reply { Some(s) => Some(s@), None => None }) == (if case@ == "short"@ { Some("[null,false,true]"@) }
+        else if case@ == "long"@ { Some("[null,false,true,null,true]"@) }
+        else if case@ == "mixed"@ { Some("[null,false,false,true]"@) }
+        else { None }),
+{
+    if <&str>::exec_eq(case, "short") { Some("[null,false,true]") }
+    else if <&str>::exec_eq(case, "long") { Some("[null,false,true,null,true]") }
+    else if <&str>::exec_eq(case, "mixed") { Some("[null,false,false,true]") }
+    else { None }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     let invocation = env::args().next().expect("missing fixture invocation");
     let executable = Path::new(&invocation);
@@ -24,6 +45,15 @@ fn main() -> ExitCode {
             std::io::stdout()
                 .write_all(&std::fs::read("tracked").unwrap_or_default())
                 .unwrap();
+        }
+        (Some("fixture-compiler-query"), ["proof-rows"]) => {
+            use chrono_host_bootstrap::compiler::{OutputContract, proof_rows};
+            let contract = OutputContract {
+                version: "fixture-version".into(),
+                commit: "fixture-commit".into(),
+            };
+            let result = proof_rows(&contract, &["cargo λ", "proof", "proof", "ordinary"]);
+            println!("{}", serde_json::to_string(&result).unwrap());
         }
         (Some("fixture-compiler-query"), [case]) => {
             let input = if case.starts_with("closed-") {
@@ -49,7 +79,10 @@ fn main() -> ExitCode {
                 "closed-status" | "status" => (17, b"{", b""),
                 "closed-invalid-utf8" | "invalid-utf8" => (17, b"true", &[0xff]),
                 "newlines" => (17, b"true", b"\n\n"),
-                _ => return ExitCode::from(99),
+                other => match proof_row_reply(other) {
+                    Some(text) => (0, text.as_bytes(), b""),
+                    None => return ExitCode::from(99),
+                },
             };
             std::io::stdout().write_all(stdout).unwrap();
             std::io::stderr().write_all(stderr).unwrap();

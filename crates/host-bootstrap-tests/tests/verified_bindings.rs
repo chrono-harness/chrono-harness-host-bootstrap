@@ -57,8 +57,8 @@ mod release_observation {
 
     verus! {
     pub fn version_text() -> (value: &'static str)
-        ensures value@ == "chrono-host-bootstrap 0.1.6"@,
-    { "chrono-host-bootstrap 0.1.6" }
+        ensures value@ == "chrono-host-bootstrap 0.1.7"@,
+    { "chrono-host-bootstrap 0.1.7" }
 
     pub fn diagnostic() -> (value: &'static str)
         ensures value@ == "unknown native bootstrap command or arguments"@,
@@ -1190,3 +1190,11 @@ fn compiler_proofs_require_a_named_host_directory_and_own_process() {
     expect(!original_for("another", "proof", false));
 }
 }
+
+#[cfg(verus_keep_ghost)]
+#[path = "compiler_query.rs"]
+mod compiler_query;
+
+#[cfg(verus_keep_ghost)]
+#[path = "support/tool.rs"]
+mod compiler_fixture;
