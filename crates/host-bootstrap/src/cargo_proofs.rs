@@ -791,10 +791,13 @@ impl Replay {
                     continue;
                 };
                 if let Some((wanted, bytes)) = selected.sources.get(relative) {
-                    if !used.insert(relative.to_owned())
-                        || wanted != digest
-                        || length != bytes.to_string()
-                    {
+                    if !cargo::archive_source_matches(
+                        used.insert(relative.to_owned()),
+                        digest,
+                        wanted,
+                        length,
+                        &bytes.to_string(),
+                    ) {
                         return Err(format!(
                             "Cargo candidate source differs: {}",
                             relative.display()
@@ -807,7 +810,7 @@ impl Replay {
             }
         }
         let verified = check(&self.contract, &reports)?;
-        if verified.len() != reports.len() || verified.iter().any(|v| v != &Some(true)) {
+        if !cargo::successful_proofs(&verified, reports.len()) {
             return Err("Cargo archive lacks an entire-root proof".into());
         }
         Ok(self

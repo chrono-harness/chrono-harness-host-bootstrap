@@ -47,6 +47,27 @@ fn required_operation_has_one_successful_report_and_a_nonempty_regular_library()
     expect(!cargo::nonempty_artifact(false, 5));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn archived_proof_requires_one_success_per_root() {
+    expect(cargo::successful_proofs(&[Some(true), Some(true)], 2));
+    expect(!cargo::successful_proofs(&[Some(true)], 2));
+    expect(!cargo::successful_proofs(&[Some(true), Some(true)], 1));
+    expect(!cargo::successful_proofs(&[Some(true), None], 2));
+    expect(!cargo::successful_proofs(&[Some(false), Some(true)], 2));
+}
+
+#[cfg(verus_keep_ghost)]
+fn archived_source_requires_a_unique_exact_checksum(
+    digest: &str, other_digest: &str, length: &str, other_length: &str,
+)
+    requires digest@ != other_digest@, length@ != other_length@,
+{
+    expect(cargo::archive_source_matches(true, digest, digest, length, length));
+    expect(!cargo::archive_source_matches(false, digest, digest, length, length));
+    expect(!cargo::archive_source_matches(true, digest, other_digest, length, length));
+    expect(!cargo::archive_source_matches(true, digest, digest, other_length, length));
+}
+
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn native_source_check_requires_every_declared_byte_path() {
