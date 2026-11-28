@@ -23,6 +23,105 @@ mod registered_methods_boundaries;
 
 verus! {
 
+fn expect_native_missing(rows: &Vec<cargo::NativeRow>, manifest: &str)
+    requires !cargo::missing_native_filenames(rows@, manifest@),
+        cargo::cargo_metadata(rows@, manifest@).len() == 0,
+{
+    let missing = match cargo::select_native_library(rows, manifest) {
+        cargo::NativeLibrary::Missing => true,
+        _ => false,
+    };
+    expect(missing);
+}
+
+fn expect_native_unique(rows: &Vec<cargo::NativeRow>, manifest: &str, expected: &String)
+    requires !cargo::missing_native_filenames(rows@, manifest@),
+        cargo::cargo_metadata(rows@, manifest@) == seq![*expected],
+{
+    let selection = cargo::select_native_library(rows, manifest);
+    let unique = match selection {
+        cargo::NativeLibrary::Unique(found) => {
+            proof {
+                let selected = cargo::cargo_metadata(rows@, manifest@);
+                assert(selected == seq![found]);
+                assert(selected[0] == found);
+                assert(selected[0] == *expected);
+                assert(found@ == expected@);
+            }
+            artifact_identity::equal_text(found.as_str(), expected.as_str())
+        },
+        _ => false,
+    };
+    expect(unique);
+}
+
+fn expect_native_ambiguous(rows: &Vec<cargo::NativeRow>, manifest: &str)
+    requires !cargo::missing_native_filenames(rows@, manifest@),
+        cargo::cargo_metadata(rows@, manifest@).len() > 1,
+{
+    let ambiguous = match cargo::select_native_library(rows, manifest) {
+        cargo::NativeLibrary::Ambiguous => true,
+        _ => false,
+    };
+    expect(ambiguous);
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn native_selection_ignores_other_targets_and_counts_duplicate_paths() {
+    use cargo::{NativeRow, NativeTarget};
+    let manifest = "/product/Cargo.toml";
+    let metadata = "/custom dir/deps/libunit.rmeta".to_owned();
+    let row = |reason: &str, manifest: &str, kinds: &[&str], files| NativeRow {
+        reason: reason.to_owned(),
+        manifest_path: Some(manifest.to_owned()),
+        target: Some(NativeTarget { kind: kinds.iter().map(|kind| kind.to_string()).collect() }),
+        filenames: files,
+    };
+    let mut rows = vec![
+        row("compiler-artifact", "/other/Cargo.toml", &["lib"], Some(vec![metadata.clone()])),
+        row("compiler-artifact", manifest, &["bin"], Some(vec![metadata.clone()])),
+        row("compiler-artifact", manifest, &["lib", "bin"], Some(vec![metadata.clone()])),
+        row("compiler-message", manifest, &["lib"], None),
+    ];
+    expect_native_missing(&rows, manifest);
+    rows.push(row("compiler-artifact", manifest, &["lib"], Some(vec![
+        "/custom dir/deps/libunit.rlib".to_owned(), metadata.clone(),
+    ])));
+    expect_native_unique(&rows, manifest, &metadata);
+    rows.push(row("compiler-artifact", manifest, &["lib"], Some(vec![metadata.clone()])));
+    expect_native_ambiguous(&rows, manifest);
+    rows.pop();
+    rows.push(row("compiler-artifact", manifest, &["lib"], Some(vec![metadata.clone(), metadata])));
+    expect_native_ambiguous(&rows, manifest);
+    rows.push(row("compiler-artifact", manifest, &["lib"], None));
+    assert!(matches!(cargo::select_native_library(&rows, manifest), cargo::NativeLibrary::InvalidFilenames));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_stem_keeps_the_directory_and_removes_the_leaf_prefix_and_suffix() {
+    // lib/libx.rmeta -> lib/x
+    let input = [108u8, 105, 98, 47, 108, 105, 98, 120, 46, 114, 109, 101, 116, 97];
+    let expected = [108u8, 105, 98, 47, 120];
+    let path = vstd::slice::slice_subrange(&input, 0, input.len());
+    assert(path@ =~= input@);
+    proof {
+        assert(path@.skip(8) =~= seq![46u8, 114, 109, 101, 116, 97]);
+        let leaf = path@.take(8);
+        assert(leaf.subrange(4, 7) =~= seq![108u8, 105, 98]);
+        assert forall|i: int| 4 <= i < leaf.len() implies leaf[i] != 47 by {
+            assert(i == 4 || i == 5 || i == 6 || i == 7);
+        }
+        assert(cargo::basename_start(leaf, 4));
+    }
+    let actual = cargo::native_dep_info_stem(path);
+    proof {
+        cargo::stem_at_basename(path@, 4);
+        assert(actual@ =~= expected@);
+    }
+    expect(artifact_identity::equal_bytes(actual.as_slice(), &expected));
+}
+
 #[cfg(verus_keep_ghost)]
 fn source_command_preserves_the_callers_full_list(command: String, mode: String, output: String, source: String)
     requires command@ == "check-compiler-sources"@,

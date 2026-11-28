@@ -62,6 +62,242 @@ pub struct Artifact {
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
 pub struct Identity { pub path: String, pub sha256: String, pub length: u64 }
 
+/// The fields reported by Cargo that the native coverage check consumes.
+#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
+pub struct NativeRow {
+    pub reason: String,
+    pub manifest_path: Option<String>,
+    pub target: Option<NativeTarget>,
+    pub filenames: Option<Vec<String>>,
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
+pub struct NativeTarget {
+    pub kind: Vec<String>,
+}
+
+pub open spec fn native_artifact(row: &NativeRow, manifest: Seq<char>) -> bool {
+    row.reason@ == "compiler-artifact"@
+        && match row.manifest_path { Some(path) => path@ == manifest, None => false }
+        && match row.target {
+            Some(target) => target.kind.len() == 1 && target.kind[0]@ == "lib"@,
+            None => false,
+        }
+}
+
+fn native_artifact_matches(row: &NativeRow, manifest: &str) -> (matches: bool)
+    ensures matches == native_artifact(row, manifest@),
+{
+    equal_text(row.reason.as_str(), "compiler-artifact")
+        && match &row.manifest_path {
+            Some(path) => equal_text(path.as_str(), manifest),
+            None => false,
+        }
+        && match &row.target {
+            Some(target) => target.kind.len() == 1 && equal_text(target.kind[0].as_str(), "lib"),
+            None => false,
+        }
+}
+
+pub open spec fn is_metadata(path: Seq<u8>) -> bool {
+    path.len() >= 6 && path.skip(path.len() - 6) == seq![46u8, 114, 109, 101, 116, 97]
+}
+
+fn metadata_suffix(path: &[u8]) -> (matches: bool)
+    ensures matches == is_metadata(path@),
+{
+    path.len() >= 6 && equal_bytes(slice_subrange(path, path.len() - 6, path.len()), &[46u8, 114, 109, 101, 116, 97])
+}
+
+pub open spec fn metadata_files(files: Seq<String>) -> Seq<String>
+    decreases files.len(),
+{
+    if files.len() == 0 { Seq::empty() }
+    else {
+        let last = files.last();
+        let previous = metadata_files(files.take(files.len() - 1));
+        if is_metadata(vstd::utf8::encode_utf8(last@)) { previous.push(last) }
+        else { previous }
+    }
+}
+
+spec fn all_metadata(files: Seq<String>) -> bool {
+    forall|i: int| 0 <= i < files.len() ==>
+        is_metadata(vstd::utf8::encode_utf8(#[trigger] files[i]@))
+}
+
+fn append_metadata(files: &Vec<String>, found: &mut Vec<String>)
+    requires all_metadata(old(found)@),
+    ensures found@ == old(found)@ + metadata_files(files@), all_metadata(found@),
+{
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            found@ == old(found)@ + metadata_files(files@.take(i as int)),
+            all_metadata(found@),
+        decreases files.len() - i,
+    {
+        let file = &files[i];
+        let ghost before = found@;
+        if metadata_suffix(file.as_str().as_bytes()) {
+            found.push(file.clone());
+            assert(found@ =~= before.push(*file));
+            assert forall|j: int| 0 <= j < found.len() implies
+                is_metadata(vstd::utf8::encode_utf8(#[trigger] found@[j]@)) by {
+                if j < before.len() { assert(found@[j] == before[j]); }
+                else { assert(found@[j] == *file); }
+            }
+        }
+        proof {
+            let next = files@.take(i + 1);
+            assert(next.last() == *file);
+            assert(next.take(i as int) =~= files@.take(i as int));
+            assert(found@ =~= old(found)@ + metadata_files(next));
+        }
+        i += 1;
+    }
+    assert(files@.take(files.len() as int) =~= files@);
+}
+
+pub open spec fn cargo_metadata(rows: Seq<NativeRow>, manifest: Seq<char>) -> Seq<String>
+    decreases rows.len(),
+{
+    if rows.len() == 0 { Seq::empty() }
+    else {
+        let row = rows.last();
+        let previous = cargo_metadata(rows.take(rows.len() - 1), manifest);
+        if native_artifact(&row, manifest) {
+            match row.filenames { Some(files) => previous + metadata_files(files@), None => previous }
+        } else { previous }
+    }
+}
+
+pub open spec fn missing_native_filenames(rows: Seq<NativeRow>, manifest: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < rows.len()
+        && native_artifact(&#[trigger] rows[i], manifest) && rows[i].filenames.is_none()
+}
+
+pub enum NativeLibrary { InvalidFilenames, Missing, Unique(String), Ambiguous }
+
+pub fn select_native_library(rows: &Vec<NativeRow>, manifest: &str) -> (selection: NativeLibrary)
+    ensures match selection {
+        NativeLibrary::InvalidFilenames => missing_native_filenames(rows@, manifest@),
+        NativeLibrary::Missing => !missing_native_filenames(rows@, manifest@)
+            && cargo_metadata(rows@, manifest@).len() == 0,
+        NativeLibrary::Unique(path) => !missing_native_filenames(rows@, manifest@)
+            && cargo_metadata(rows@, manifest@) == seq![path] && is_metadata(vstd::utf8::encode_utf8(path@)),
+        NativeLibrary::Ambiguous => !missing_native_filenames(rows@, manifest@)
+            && cargo_metadata(rows@, manifest@).len() > 1,
+    },
+{
+    let mut found = Vec::new();
+    let mut i = 0;
+    while i < rows.len()
+        invariant 0 <= i <= rows.len(),
+            found@ == cargo_metadata(rows@.take(i as int), manifest@),
+            all_metadata(found@),
+            forall|j: int| 0 <= j < i && native_artifact(&#[trigger] rows@[j], manifest@)
+                ==> rows@[j].filenames.is_some(),
+        decreases rows.len() - i,
+    {
+        let row = &rows[i];
+        if native_artifact_matches(row, manifest) {
+            let Some(files) = &row.filenames else {
+                assert(rows@[i as int].filenames.is_none());
+                return NativeLibrary::InvalidFilenames;
+            };
+            append_metadata(files, &mut found);
+        }
+        proof {
+            let next = rows@.take(i + 1);
+            assert(next.last() == *row);
+            assert(next.take(i as int) =~= rows@.take(i as int));
+            assert(found@ == cargo_metadata(next, manifest@));
+        }
+        i += 1;
+    }
+    assert(rows@.take(rows.len() as int) =~= rows@);
+    if found.len() == 0 { NativeLibrary::Missing }
+    else if found.len() == 1 {
+        assert(found@ =~= seq![found@[0]]);
+        NativeLibrary::Unique(found[0].clone())
+    } else { NativeLibrary::Ambiguous }
+}
+
+pub fn native_library_arguments<'a>(args: &'a [String]) -> (selection: Option<(&'a str, &'a str)>)
+    ensures selection.is_some() == (args.len() == 3 && args@[0]@ == "select-native-cargo-library"@),
+        selection.is_some() ==> selection.unwrap().0@ == args@[1]@ && selection.unwrap().1@ == args@[2]@,
+{
+    if args.len() != 3 || !equal_text(args[0].as_str(), "select-native-cargo-library") { return None; }
+    Some((args[1].as_str(), args[2].as_str()))
+}
+
+pub open spec fn basename_start(path: Seq<u8>, start: int) -> bool {
+    0 <= start <= path.len() && (start == 0 || path[start - 1] == 47)
+        && forall|i: int| start <= i < path.len() ==> path[i] != 47
+}
+
+pub open spec fn lib_prefix(path: Seq<u8>, start: int) -> bool {
+    start + 3 <= path.len() && path.subrange(start, start + 3) == seq![108u8, 105, 98]
+}
+
+pub open spec fn stem_at(path: Seq<u8>, start: int) -> Seq<u8> {
+    path.take(start) + path.subrange(if lib_prefix(path, start) { start + 3 } else { start }, path.len() as int)
+}
+
+pub open spec fn dep_info_stem(path: Seq<u8>) -> Seq<u8> {
+    let name = path.take(path.len() - 6);
+    let start = choose|i: int| basename_start(name, i);
+    stem_at(name, start)
+}
+
+pub proof fn stem_at_basename(path: Seq<u8>, start: int)
+    requires basename_start(path.take(path.len() - 6), start),
+    ensures dep_info_stem(path) == stem_at(path.take(path.len() - 6), start),
+{
+    let name = path.take(path.len() - 6);
+    assert(exists|i: int| #[trigger] basename_start(name, i));
+    let chosen = choose|i: int| basename_start(name, i);
+    if chosen < start { assert(name[start - 1] != 47); }
+    if start < chosen { assert(name[chosen - 1] != 47); }
+}
+
+/// Convert Cargo's selected metadata filename to the existing native query's stem.
+pub fn native_dep_info_stem(path: &[u8]) -> (stem: Vec<u8>)
+    requires is_metadata(path@),
+    ensures stem@ == dep_info_stem(path@),
+{
+    let end = path.len() - 6;
+    let mut start = end;
+    while start > 0 && path[start - 1] != 47
+        invariant 0 <= start <= end, end == path.len() - 6,
+            forall|i: int| start <= i < end ==> path@[i] != 47,
+        decreases start,
+    {
+        start -= 1;
+    }
+    assert(basename_start(path@.take(end as int), start as int));
+    let skip = end - start >= 3
+        && equal_bytes(slice_subrange(path, start, start + 3), &[108u8, 105, 98]);
+    assert(skip == lib_prefix(path@.take(end as int), start as int)) by {
+        if end - start >= 3 {
+            assert(path@.take(end as int).subrange(start as int, start + 3)
+                =~= path@.subrange(start as int, start + 3));
+        }
+    }
+    let mut stem = slice_to_vec(slice_subrange(path, 0, start));
+    let rest = slice_subrange(path, if skip { start + 3 } else { start }, end);
+    extend(&mut stem, rest);
+    proof {
+        stem_at_basename(path@, start as int);
+        assert(path@.take(end as int).take(start as int) =~= path@.take(start as int));
+        let offset = if skip { start as int + 3 } else { start as int };
+        assert(path@.take(end as int).subrange(offset, end as int) =~= rest@);
+        assert(stem@ =~= dep_info_stem(path@));
+    }
+    stem
+}
+
 pub fn bounded_original(regular: bool, bytes: u64) -> (valid: bool)
     ensures valid == (regular && bytes <= 8_388_608),
 { regular && bytes <= 8_388_608 }

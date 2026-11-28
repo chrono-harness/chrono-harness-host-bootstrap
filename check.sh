@@ -23,23 +23,16 @@ cargo build --locked --message-format=json-render-diagnostics --manifest-path "$
 cargo fmt --check --manifest-path crates/host-bootstrap-tests/Cargo.toml
 cargo test --locked --manifest-path crates/host-bootstrap-tests/Cargo.toml
 # Select the candidate from this Cargo invocation, including nondefault target directories.
-artifact() {
-  jq -ers --arg manifest "$(pwd -P)/$product" --arg kind "$1" '
+bootstrap=$(jq -ers --arg manifest "$(pwd -P)/$product" '
     [.[] | select(.reason == "compiler-artifact" and .manifest_path == $manifest and
-                  .target.kind == [$kind]) |
-     if $kind == "bin" then .executable else .filenames[] | select(endswith(".rmeta")) end]
+                  .target.kind == ["bin"]) | .executable]
     | if length == 1 then .[0] else error("expected one bootstrap artifact") end
-  ' "$scratch/cargo.jsonl"
-}
-bootstrap=$(artifact bin)
+  ' "$scratch/cargo.jsonl")
 "$bootstrap" ci-install-table-v1 manager > "$scratch/manager.expected"
 sed -n '/^ci_install_choice() {$/,/^}$/p' .chrono-harness/ci/install.sh > "$scratch/manager.actual"
 cmp "$scratch/manager.expected" "$scratch/manager.actual"
 python3 -B .chrono-harness/ci/test_install.py
-metadata=$(artifact lib)
-filename=${metadata##*/}
-stem=${filename#lib}
-library=${metadata%/*}/${stem%.rmeta}
+library=$("$bootstrap" select-native-cargo-library "$(pwd -P)/$product" "$scratch/cargo.jsonl")
 
 src=crates/host-bootstrap/src
 tests=crates/host-bootstrap-tests/tests

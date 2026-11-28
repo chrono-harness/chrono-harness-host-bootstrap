@@ -135,6 +135,18 @@ fn run() -> Result<(), BuildFailure> {
         )
         .map_err(|error| BuildFailure::from(format!("E_VERUS_COVERAGE: {error}")));
     }
+    if let Some((manifest, original)) =
+        chrono_host_bootstrap::verified_cargo::native_library_arguments(&arguments)
+    {
+        let stem =
+            chrono_host_bootstrap::compiler::native_cargo_library(manifest, Path::new(original))
+                .map_err(|error| BuildFailure::from(format!("E_VERUS_COVERAGE: {error}")))?;
+        let mut stdout = std::io::stdout().lock();
+        return stdout
+            .write_all(&stem)
+            .and_then(|()| stdout.write_all(b"\n"))
+            .map_err(|error| BuildFailure::from(error.to_string()));
+    }
     match arguments.as_slice() {
         [command] if command == "--version" => {
             println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
