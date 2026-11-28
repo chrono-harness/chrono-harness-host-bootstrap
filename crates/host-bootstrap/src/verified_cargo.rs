@@ -319,7 +319,31 @@ pub fn nonempty_artifact(regular: bool, length: u64) -> (present: bool)
 pub fn one_successful_proof(rows: &[Option<bool>]) -> (accepted: bool)
     ensures accepted == (rows.len() == 1 && rows@[0] == Some(true)),
 {
-    rows.len() == 1 && rows[0] == Some(true)
+    successful_proofs(rows, 1)
+}
+
+pub fn successful_proofs(rows: &[Option<bool>], expected: usize) -> (accepted: bool)
+    ensures accepted == (rows.len() == expected
+        && forall|i: int| 0 <= i < rows.len() ==> rows@[i] == Some(true)),
+{
+    if rows.len() != expected { return false; }
+    let mut i = 0;
+    while i < rows.len()
+        invariant 0 <= i <= rows.len(), rows.len() == expected,
+            forall|j: int| 0 <= j < i ==> rows@[j] == Some(true),
+        decreases rows.len() - i,
+    {
+        if rows[i] != Some(true) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn archive_source_matches(first: bool, digest: &str, expected_digest: &str,
+    length: &str, expected_length: &str) -> (matched: bool)
+    ensures matched == (first && digest@ == expected_digest@ && length@ == expected_length@),
+{
+    first && equal_text(digest, expected_digest) && equal_text(length, expected_length)
 }
 
 pub fn all_present(present: &Vec<bool>) -> (complete: bool)

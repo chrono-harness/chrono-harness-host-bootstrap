@@ -5,6 +5,20 @@ use vstd::prelude::verus;
 use vstd::prelude::*;
 
 verus! {
+/// Preserve the operation failure before diagnosing an incomplete successful build.
+pub fn complete_outcome<E>(outcome: Result<(), E>, complete: bool) -> (result: Result<(), Option<E>>)
+    ensures result == match outcome {
+        Err(error) => Err(Some(error)),
+        Ok(()) => if complete { Ok(()) } else { Err(None) },
+    },
+{
+    match outcome {
+        Err(error) => Err(Some(error)),
+        Ok(()) if !complete => Err(None),
+        Ok(()) => Ok(()),
+    }
+}
+
 pub fn published_slot<'a>(declared: Option<&'a str>, passed: bool) -> (slot: Option<&'a str>)
     ensures slot == (if passed { declared } else { None }),
 {
@@ -555,11 +569,9 @@ impl<'a> Construction<'a> {
             self.profile.owner_stage.is_some(),
             self.report.owner_stage.is_some(),
         );
-        let outcome = if outcome.is_ok() && !complete {
-            Err("bootstrap construction is incomplete".into())
-        } else {
-            outcome
-        };
+        let outcome = complete_outcome(outcome, complete).map_err(|error| {
+            error.unwrap_or_else(|| "bootstrap construction is incomplete".into())
+        });
         self.report.status = policy::construction_status(outcome.is_err(), complete);
         self.report.error = outcome.as_ref().err().map(|error| error.message.clone());
         self.report.source = Some(source::source_identity(
