@@ -67,9 +67,9 @@ pub fn deployed_tool_installer() -> (source: &'static str) {
 }
 
 pub fn installer_digest_matches(digest: &String) -> (accepted: bool)
-    ensures accepted == (digest@ == "463052d115cab6d117f83b7546ee3c9481f42ab210c4347833668f84eb6d1941"@),
+    ensures accepted == (digest@ == "39566b5b467e31e09edb73ffc0c79b6c719ef0f59b684df9c165bfb66048af47"@),
 {
-    *digest == "463052d115cab6d117f83b7546ee3c9481f42ab210c4347833668f84eb6d1941".to_string()
+    *digest == "39566b5b467e31e09edb73ffc0c79b6c719ef0f59b684df9c165bfb66048af47".to_string()
 }
 
 /// Both deployed files are inputs to this proof compilation and its native test.
@@ -89,9 +89,9 @@ pub fn roadmap_repository(checkout: bool, owner_id: u64, repo_id: u64) -> (accep
 }
 /// The native caller hashes the actual UTF-8 bytes embedded above.
 pub fn roadmap_matches(script: &String, workflow: &String) -> (accepted: bool)
-    ensures accepted == (script@ == "5824ea576bd25a792c76e976dc2dcec1c7eb684f6a3a9de9919220a546b61cf9"@ && workflow@ == "04e88682c80646ca4f00cc1f26f568a1b5650330724a8ba5f4af213600c6d901"@),
+    ensures accepted == (script@ == "86e97ab0ed63be36d37d32e7d164da4e226c6f616685ad4ce1dd75f814095f8a"@ && workflow@ == "91d37272d800f59ace3b244b4d126bfa18f4d4135e09398cbe28f8e5b76b7815"@),
 {
-    *script == "5824ea576bd25a792c76e976dc2dcec1c7eb684f6a3a9de9919220a546b61cf9".to_string() && *workflow == "04e88682c80646ca4f00cc1f26f568a1b5650330724a8ba5f4af213600c6d901".to_string()
+    *script == "86e97ab0ed63be36d37d32e7d164da4e226c6f616685ad4ce1dd75f814095f8a".to_string() && *workflow == "91d37272d800f59ace3b244b4d126bfa18f4d4135e09398cbe28f8e5b76b7815".to_string()
 }
 }
 
