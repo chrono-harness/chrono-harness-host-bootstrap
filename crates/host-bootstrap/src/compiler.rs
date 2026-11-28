@@ -7,7 +7,9 @@ use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 #[cfg(not(verus_keep_ghost))]
 use std::{
-    io::Write,
+    fs::File,
+    io::{BufReader, Write},
+    path::Path,
     process::{Command, Stdio},
     thread,
 };
@@ -58,6 +60,25 @@ pub fn query<T: DeserializeOwned>(operation: &str, input: &impl Serialize) -> Re
 #[cfg(not(verus_keep_ghost))]
 pub fn compiler<T: DeserializeOwned>(input: Value) -> Result<T, String> {
     query("compiler-output-v1", &input)
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub fn native_cargo_library(manifest: &str, original: &Path) -> Result<Vec<u8>, String> {
+    use crate::verified_cargo::{NativeLibrary, native_dep_info_stem, select_native_library};
+
+    let file = File::open(original).map_err(|error| format!("{}: {error}", original.display()))?;
+    let rows = serde_json::Deserializer::from_reader(BufReader::new(file))
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("{}: {error}", original.display()))?;
+    match select_native_library(&rows, manifest) {
+        NativeLibrary::InvalidFilenames => {
+            Err("matched native Cargo artifact has no filenames".into())
+        }
+        NativeLibrary::Missing => Err("no native Cargo metadata artifact matched".into()),
+        NativeLibrary::Ambiguous => Err("multiple native Cargo metadata artifacts matched".into()),
+        NativeLibrary::Unique(path) => Ok(native_dep_info_stem(path.as_bytes())),
+    }
 }
 
 #[cfg(not(verus_keep_ghost))]
